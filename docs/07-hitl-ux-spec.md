@@ -32,7 +32,7 @@ The atomic loop, described precisely:
   │  "The invoice total doesn't match the PO."    │
   │                                               │
   │  ▸ Prediction:  [ billing_dispute ]  92% ███▌ │   ← greyed pre-fill
-  │    press ⏎ to accept · type to correct · ? why│
+  │    press Enter to accept · type to correct · ? why│
   └─────────────────────────────────────────────┘
 ```
 
@@ -83,17 +83,17 @@ The trick is **prefetch + optimistic commit**: the client keeps the next 10–20
   │  • billing_dispute   ┐  "Customer contests a charge,      │
   │  • refund_request    │   invoice, or amount owed.         │
   │  • how_to            │   NOT a refund (see refund_request)│
-  │  • bug_report        ┘   Examples: ✓ "…total is wrong"    │
-  │  + add class                       ✗ "…want my money back"│
+  │  • bug_report        ┘   Examples: x "…total is wrong"    │
+  │  + add class                       - "…want my money back"│
   │  ──────────────────────────────────────────────────────  │
-  │  ⚠ 23 items are where labels disagree — clarify the rule. │
+  │  ! 23 items are where labels disagree — clarify the rule. │
   │     ▸ "I was double-charged then want it reversed"        │
   │       model: billing_dispute (.51) · annotator: refund    │
   │       [ It's billing ] [ It's refund ] [ Add a rule ▸ ]   │
   └──────────────────────────────────────────────────────────┘
 ```
 
-**Interaction notes — the ambiguity-surfacing flow.** The rubric editor is part of *trust*, not just setup. The taxonomy is a structured tree (classes, optional nesting, per-class guidelines with ✓/✗ examples). Its signature feature is the **disagreement banner**: the system continuously mines items where models disagree with each other, with annotators, or with gold, clusters them by the boundary they straddle, and presents them as *"these N items are where labels disagree — clarify the rule."* Resolving one is two clicks (pick the right side) plus an optional one-line rule that gets appended to the guideline and **fed back into the labeler's prompt/gold set**. This is how a fuzzy taxonomy sharpens over a project rather than rotting. See [accuracy engine](04-accuracy-and-trust-engine.md) for how disagreement is computed.
+**Interaction notes — the ambiguity-surfacing flow.** The rubric editor is part of *trust*, not just setup. The taxonomy is a structured tree (classes, optional nesting, per-class guidelines with x/- examples). Its signature feature is the **disagreement banner**: the system continuously mines items where models disagree with each other, with annotators, or with gold, clusters them by the boundary they straddle, and presents them as *"these N items are where labels disagree — clarify the rule."* Resolving one is two clicks (pick the right side) plus an optional one-line rule that gets appended to the guideline and **fed back into the labeler's prompt/gold set**. This is how a fuzzy taxonomy sharpens over a project rather than rotting. See [accuracy engine](04-accuracy-and-trust-engine.md) for how disagreement is computed.
 
 ### (c) The review queue — the core screen
 
@@ -101,17 +101,17 @@ This is the screen the product lives or dies on. The list is **ordered by the ac
 
 ```
   ┌───────────────┬──────────────────────────────────────────────┐
-  │ QUEUE  1,248  │  Item #4471          conf 0.92 ███▌  ⏎ accept │
+  │ QUEUE  1,248  │  Item #4471          conf 0.92 ███▌  Enter accept │
   │ ───────────── │  ──────────────────────────────────────────  │
   │ ▸#4471 .92 bd │  "The invoice total doesn't match the PO and  │
-  │  #4472 .61 ⚠  │   I've been charged twice this month."        │
-  │  #4473 .55 ⚠? │                                               │
+  │  #4472 .61 !  │   I've been charged twice this month."        │
+  │  #4473 .55 !? │                                               │
   │  #4474 .98 bd │  Prediction ▸ [ billing_dispute ]   ▾         │
-  │  #4475 .49 ✦  │  why? ▸ "mentions invoice mismatch + charge;  │
+  │  #4475 .49 *  │  why? ▸ "mentions invoice mismatch + charge;  │
   │   …rare class │          no refund language" (toggle: e)      │
   │ ───────────── │  ──────────────────────────────────────────  │
-  │ filter: all ▾ │  [⏎ accept] [type correct] [x reject] [s skip]│
-  │ ✦=rare ⚠=low  │  j ↓  k ↑   ·   142/min · ~9m left            │
+  │ filter: all ▾ │  [Enter accept] [type correct] [x reject] [s skip]│
+  │ *=rare !=low  │  j ↓  k ↑   ·   142/min · ~9m left            │
   └───────────────┴──────────────────────────────────────────────┘
 ```
 
@@ -121,20 +121,20 @@ This is the screen the product lives or dies on. The list is **ordered by the ac
 - **`J` / `K`** move next/previous without deciding (review-before-commit); the list pane mirrors position.
 - **Bulk-accept a filtered view.** Filter the queue (e.g. `class:invoice conf:≥0.95`), then `Shift+Enter` → *"Accept all 247 'invoice' predictions ≥ 0.95?"* with a one-keystroke confirm. The throughput multiplier (see §6).
 - **Diff view.** When an item was previously labeled (re-run, or model-vs-gold), a `D` toggle shows a side-by-side **old → new** diff with changed tokens/classes highlighted, so corrections on re-labeled data are auditable at a glance.
-- **Rare-class & OOD markers** (`✦`, `⚠?`) are rendered in the list rail so the reviewer sees *why* an item is queued before they reach it.
+- **Rare-class & OOD markers** (`*`, `!?`) are rendered in the list rail so the reviewer sees *why* an item is queued before they reach it.
 
 **How each beachhead label type renders in the answer pane:**
 
 *Single / multi-class classification* — ghost-text chip(s); `Enter` accepts; typing opens fuzzy picker; for multi-class, number keys `1…9` toggle the top predicted classes.
 ```
-  Prediction ▸ [ billing_dispute ]      ⏎ accept · type to change
-  multi:  [✓ billing] [ refund ] [✓ urgent ]    (1/2/3 toggle)
+  Prediction ▸ [ billing_dispute ]      Enter accept · type to change
+  multi:  [x billing] [ refund ] [x urgent ]    (1/2/3 toggle)
 ```
 
 *Span / NER highlighting* — predicted spans are pre-highlighted inline; `Enter` accepts all; `Tab` cycles spans; correcting = drag to reselect or `Backspace` to drop a span; `L` re-labels the focused span via the type picker.
 ```
   "Contact ⟦John Doe⟧ᴘᴇʀ at ⟦Acme Corp⟧ᴏʀɢ before ⟦Friday⟧ᴅᴀᴛᴇ."
-  focused: ⟦Acme Corp⟧ ORG 0.88   ⏎ accept all · ⇥ next span · l relabel
+  focused: ⟦Acme Corp⟧ ORG 0.88   Enter accept all · ⇥ next span · l relabel
 ```
 
 *Pairwise / preference (A-vs-B)* — two responses side by side, the model's predicted winner highlighted with its margin; `A` / `B` pick a side, `=` ties, `Enter` accepts the prediction. For subjective tasks the **annotator-disagreement signal is shown** ("3 of 5 prefer A") so the reviewer judges with the spread in view rather than a false binary.
@@ -142,7 +142,7 @@ This is the screen the product lives or dies on. The list is **ordered by the ac
   ┌── A ──────────────┐  ┌── B ──────────────┐
   │ "Here's a step-by-│  │ "Just google it." │   predicted: A (margin .31)
   │  step fix…"        │  │                   │   disagreement: 3/5 → A
-  └───────────────────┘  └───────────────────┘   a=A  b=B  = tie  ⏎ accept
+  └───────────────────┘  └───────────────────┘   a=A  b=B  = tie  Enter accept
 ```
 
 ### (d) The Trust / Coverage dashboard
@@ -173,11 +173,11 @@ This is the screen the product lives or dies on. The list is **ordered by the ac
   ┌──────────────────────────────────────────────────────────┐
   │  Gold set (52 / 100 labeled)   ·  building calibration…   │
   │  These are labeled by YOU and define ground truth.        │
-  │  [ same review gesture as the queue — ⏎ / type / x ]      │
+  │  [ same review gesture as the queue — Enter / type / x ]      │
   │  ──────────────────────────────────────────────────────  │
   │  Audit  ▸ spot-check auto-applied items                   │
   │  Sampling 200 of 34,223 auto-applied (random + boundary)  │
-  │  Found 4 disagreements → measured precision 0.962 ✓≥0.95  │
+  │  Found 4 disagreements → measured precision 0.962 ≥ 0.95 (pass)  │
   │  [ view the 4 ] [ re-tune slider ] [ accept audit ]       │
   └──────────────────────────────────────────────────────────┘
 ```
@@ -190,11 +190,11 @@ This is the screen the product lives or dies on. The list is **ordered by the ac
   ┌──────────────────────────────────────────────────────────┐
   │  Export ▸ Support intent · 48,201 items                   │
   │  Format: ( ) JSONL  (•) HF dataset  ( ) CSV  ( ) Parquet  │
-  │  Include: [✓] labels [✓] confidence [✓] provenance        │
+  │  Include: [x] labels [x] confidence [x] provenance        │
   │  ──────────────────────────────────────────────────────  │
   │  QUALITY REPORT                                            │
   │   • Coverage: 71% auto · 29% human-reviewed               │
-  │   • Precision by class:  billing .97 · refund .94 ⚠       │
+  │   • Precision by class:  billing .97 · refund .94 !       │
   │   • Audit: measured 0.962 over 200-item sample            │
   │   • Known failure modes: refund↔billing boundary (23)     │
   │   [ Download report.md ]   [ Export dataset ▸ ]           │
@@ -231,8 +231,8 @@ The map is **user-remappable** and the cheatsheet (`?`) is always one key away. 
 
 The hard problem is showing confidence **without overload** — a number on every row becomes noise. Guidance:
 
-- **Encode confidence redundantly but quietly.** A short bar + the numeric score, co-located with the label chip. Color is a *secondary* channel, never the only one (accessibility, §8). Suggested affordances: **high** (≥ target) = calm/neutral, no alarm; **borderline** (just under target) = amber chip + `⚠`; **low / OOD** = stronger marker (`⚠?`) and the item floated up the queue.
-- **Rare classes get a dedicated glyph** (`✦`), never a color alone, and are never inside the auto-applied set — they always reach a human.
+- **Encode confidence redundantly but quietly.** A short bar + the numeric score, co-located with the label chip. Color is a *secondary* channel, never the only one (accessibility, §8). Suggested affordances: **high** (≥ target) = calm/neutral, no alarm; **borderline** (just under target) = amber chip + `!`; **low / OOD** = stronger marker (`!?`) and the item floated up the queue.
+- **Rare classes get a dedicated glyph** (`*`), never a color alone, and are never inside the auto-applied set — they always reach a human.
 - **The "explain" reveal is progressive disclosure.** Collapsed by default (a `why?` affordance + `E`); expanded it shows a one-line rationale and, where available, highlighted evidence tokens in the source text. The reviewer pulls explanation when a prediction surprises them — it's not shoved at them on every easy item.
 - **Confidence is *calibrated*, and we say so.** The chip reflects the calibrated probability the gate uses, not a raw softmax — the dashboard's audited precision is the proof the number means what it says (see [accuracy engine](04-accuracy-and-trust-engine.md)).
 
