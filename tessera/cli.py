@@ -34,8 +34,9 @@ def _taxonomy_for_dataset(storage, dataset_id):
 def _print_summary(gate, taxonomy=None):
     pct = round(gate.coverage * 100, 1)
     print("\n=== coverage@precision ===")
+    est = "cross-validated" if gate.cross_validated else "IN-SAMPLE (gold too small for CV)"
     print(f"  target precision : {gate.target_precision:.2%}")
-    print(f"  achieved (CV)    : {gate.achieved_precision:.2%}  (cross-validated on gold)")
+    print(f"  achieved         : {gate.achieved_precision:.2%}  ({est})")
     print(f"  AUTO-LABELED     : {gate.n_auto} items ({pct}% of dataset) at conf >= {gate.threshold:.3f}")
     print(f"  routed to human  : {gate.n_queue} items")
     print(f"  gold set         : {gate.n_gold} items")

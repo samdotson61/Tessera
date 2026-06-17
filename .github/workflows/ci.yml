@@ -20,5 +20,11 @@ jobs:
       # No third-party deps: the MVP is pure standard library.
       - name: Run tests
         run: python -m unittest discover -s tests -t . -v
-      - name: Smoke-test the demo loop
+      - name: Smoke-test the demo loop (source tree)
         run: python -m tessera --db ci.db demo --target 0.95
+      - name: Smoke-test the installed wheel from a neutral directory
+        shell: bash
+        run: |
+          pip install .
+          cd "$RUNNER_TEMP"
+          tessera --db ci2.db demo --target 0.95   # fails if sample_data isn't packaged

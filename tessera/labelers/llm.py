@@ -6,18 +6,26 @@ deterministic stub. Not exercised by the offline test suite (no network).
 from __future__ import annotations
 
 import json
-import re
 import urllib.request
 
 from .base import Labeler
 from ..schemas import Item, Taxonomy, LabelOutput
 
-_JSON = re.compile(r"\{.*\}", re.DOTALL)
-
-
 def _extract_json(text: str) -> str:
-    m = _JSON.search(text or "")
-    return m.group(0) if m else "{}"
+    """Return the first balanced {...} object in text (models often wrap JSON in prose)."""
+    text = text or ""
+    start = text.find("{")
+    if start < 0:
+        return "{}"
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+    return "{}"
 
 
 class LLMLabeler(Labeler):
@@ -73,4 +81,7 @@ class LLMLabeler(Labeler):
                 body = json.loads(r.read())
             text = body["choices"][0]["message"]["content"]
         obj = json.loads(_extract_json(text))
-        return obj["label"], float(obj.get("confidence", 0.7)), obj.get("rationale", "")
+        label = obj.get("label")
+        if not label:
+            raise ValueError("LLM response missing 'label'")
+        return label, float(obj.get("confidence", 0.7)), obj.get("rationale", "")

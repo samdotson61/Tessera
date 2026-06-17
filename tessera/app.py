@@ -15,7 +15,12 @@ def repo_root() -> str:
 
 
 def sample_dir() -> str:
-    return os.path.join(repo_root(), "sample_data")
+    """Bundled sample dataset, resolved relative to the installed package so it
+    works from a pip-installed wheel (not just a source checkout)."""
+    pkg = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sample_data")
+    if os.path.isdir(pkg):
+        return pkg
+    return os.path.join(repo_root(), "sample_data")  # source-tree fallback
 
 
 def load_taxonomy(path) -> Taxonomy:

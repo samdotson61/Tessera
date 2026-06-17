@@ -59,11 +59,10 @@ class IsotonicCalibrator:
     def transform(self, c: float) -> float:
         if not self.xs:
             return c
+        # i in [0, len(xs)-1] since bisect_right <= len(xs) and len(ys)==len(xs).
         i = bisect_right(self.xs, c) - 1
         if i < 0:
             return self.ys[0]
-        if i >= len(self.ys):
-            return self.ys[-1]
         return self.ys[i]
 
     def to_dict(self):

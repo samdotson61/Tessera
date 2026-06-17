@@ -150,5 +150,52 @@ class TestVerify(unittest.TestCase):
         self.assertFalse(judge("zzz", 0.9, self.tax)[0])   # not in taxonomy
 
 
+class TestCalibrationHonesty(unittest.TestCase):
+    def test_cv_ece_exceeds_in_sample_on_noisy_data(self):
+        # Uninformative confidences (correctness independent of confidence) — the case
+        # where in-sample isotonic looks perfect but is dishonest. CV must expose it.
+        import random
+        from tessera.engine.metrics import ece
+        rng = random.Random(0)
+        confs = [rng.random() for _ in range(80)]
+        correct = [rng.random() < 0.7 for _ in range(80)]   # base rate, no signal
+        cal = fit_calibrator("isotonic", confs, correct, min_points=5)
+        in_sample_ece = ece([cal.transform(c) for c in confs], correct)
+        cv = cross_val_metrics("isotonic", confs, correct, 0.9, k=5, min_points=10)
+        self.assertIsNotNone(cv)
+        self.assertLess(in_sample_ece, 0.05)                # in-sample looks great...
+        self.assertGreater(cv["ece"], in_sample_ece + 0.05)  # ...CV reveals the truth
+
+    def test_cross_val_returns_none_for_small_gold(self):
+        self.assertIsNone(cross_val_metrics("isotonic", [0.5] * 12, [True] * 12, 0.9,
+                                            k=5, min_points=10))  # 12 < max(2k, min+k)=15
+
+
+class TestHistogramCalibrator(unittest.TestCase):
+    def test_histogram_transform(self):
+        confs = [0.95] * 6 + [0.15] * 4
+        correct = [True] * 6 + [False] * 4         # global accuracy 0.6
+        cal = fit_calibrator("histogram", confs, correct, min_points=5)
+        self.assertEqual(cal.to_dict()["kind"], "histogram")
+        self.assertEqual(cal.transform(1.0), 1.0)   # top bin, all correct (no IndexError)
+        self.assertEqual(cal.transform(0.15), 0.0)  # bin all wrong
+        self.assertAlmostEqual(cal.transform(0.55), 0.6)  # empty bin -> global accuracy
+
+
+class TestEngineEdgeCases(unittest.TestCase):
+    def test_empty_inputs(self):
+        self.assertEqual(coverage_at_precision([], [], 0.9), (1.01, 0.0, 0.0))
+        self.assertEqual(ece([], []), 0.0)
+        self.assertEqual(ensemble([]), (None, 0.0, 0.0, {}, {}))
+
+    def test_gate_boundary_and_raw_fallback(self):
+        at_threshold = _pred("eq", "x", 0.0, calibrated=0.8)   # calibrated == threshold
+        raw_only = _pred("raw", "x", 0.85)                     # calibrated None -> uses raw
+        n_auto, n_q = apply_gate([at_threshold, raw_only], 0.8)
+        self.assertEqual((n_auto, n_q), (2, 0))
+        self.assertTrue(at_threshold.auto_applied)             # >= is inclusive
+        self.assertTrue(raw_only.auto_applied)                 # raw fallback works
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -74,22 +74,29 @@ def calibrate_and_gate(storage, dataset_id, taxonomy, target_precision, settings
 
     by_item = {p.item_id: p for p in preds}
     cal_confs, cal_correct = _gold_arrays(by_item, gold, use_calibrated=True)
-    # Operating threshold: the in-sample value the gate actually applies.
-    threshold, _gold_cov, achieved_insample = coverage_at_precision(
-        cal_confs, cal_correct, target_precision)
-    # Honest (out-of-sample) estimates of precision + calibration error via CV on raw conf.
+
+    # Choose the operating threshold and the reported precision/ECE at the SAME
+    # operating point. Prefer cross-validation (honest, out-of-sample); the gate
+    # then deploys that same threshold, so coverage and achieved_precision are
+    # coherent. Fall back to in-sample only when the gold set is too small for CV.
     cv = cross_val_metrics(settings.calibration, raw_confs, correct, target_precision,
                            min_points=settings.min_gold_for_calibration)
     if cv is not None:
+        threshold = cv["threshold"]
         achieved = cv["achieved"]
         ece_after = cv["ece"]
+        cross_validated = True
     else:
-        achieved = achieved_insample
+        threshold, _gold_cov, achieved = coverage_at_precision(
+            cal_confs, cal_correct, target_precision)
         ece_after = ece(cal_confs, cal_correct) if cal_confs else 0.0
+        cross_validated = False
 
     n_auto, n_queue = apply_gate(preds, threshold)
     full_coverage = n_auto / len(preds) if preds else 0.0
 
+    if log_events:
+        storage.delete_auto_events(dataset_id)  # idempotent: replace prior auto events
     for p in preds:
         storage.upsert_prediction(p)
         if p.auto_applied:
@@ -100,7 +107,8 @@ def calibrate_and_gate(storage, dataset_id, taxonomy, target_precision, settings
     return GateResult(
         target_precision=target_precision, threshold=threshold, coverage=full_coverage,
         achieved_precision=achieved, n_auto=n_auto, n_queue=n_queue,
-        n_gold=len(cal_confs), ece_before=ece_before, ece_after=ece_after)
+        n_gold=len(cal_confs), ece_before=ece_before, ece_after=ece_after,
+        cross_validated=cross_validated)
 
 
 def _event_for(p, taxonomy, routed, human_action=None, final_label="__model__"):

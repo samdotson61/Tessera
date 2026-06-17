@@ -33,8 +33,12 @@ def build_quality_report(storage, dataset_id, taxonomy, gate_result):
         caveats.append("No items met the precision target; everything was routed to humans. "
                        "Lower the target, improve the rubric, or add gold.")
     caveats.append("Rare classes and out-of-distribution items are never auto-applied without audit.")
-    caveats.append("Threshold is fit on the gold set; achieved precision/ECE are cross-validated "
-                   "estimates. Validate with ongoing audit sampling (docs/04).")
+    if gate_result.cross_validated:
+        caveats.append("Achieved precision/ECE are cross-validated, out-of-sample estimates at the "
+                       "deployed threshold. Validate with ongoing audit sampling (docs/04).")
+    else:
+        caveats.append("Gold set too small for cross-validation: achieved precision/ECE are "
+                       "IN-SAMPLE (optimistic). Grow the gold set before trusting these numbers.")
 
     return QualityReport(
         dataset_id=dataset_id, taxonomy_version=taxonomy.version,

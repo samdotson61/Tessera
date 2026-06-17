@@ -119,9 +119,16 @@ def make_handler(ctx: Context):
             return self._json({"error": "not found"}, 404)
 
         def _serve_static(self, rel):
-            rel = rel.lstrip("/").replace("..", "")
-            full = os.path.join(WEB_DIR, rel)
-            if not os.path.isfile(full):
+            # Canonicalize and require the resolved path to stay inside WEB_DIR.
+            # Rejects absolute paths, drive letters, "..", and symlink escapes —
+            # string-munging guards are not sufficient (see review).
+            web_root = os.path.realpath(WEB_DIR)
+            full = os.path.realpath(os.path.join(web_root, rel.lstrip("/\\")))
+            try:
+                contained = os.path.commonpath([full, web_root]) == web_root
+            except ValueError:  # different drives on Windows
+                contained = False
+            if not contained or not os.path.isfile(full):
                 return self._json({"error": "not found"}, 404)
             ext = os.path.splitext(full)[1]
             with open(full, "rb") as f:

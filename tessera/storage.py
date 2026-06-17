@@ -180,6 +180,14 @@ class Storage:
             self.conn.commit()
             return cur.lastrowid
 
+    def delete_auto_events(self, dataset_id):
+        """Remove prior auto-apply (non-human) events for a dataset so re-gating is
+        idempotent. Human-action events (routed_to_human=1) are preserved."""
+        with self._lock:
+            self.conn.execute(
+                "DELETE FROM events WHERE dataset_id=? AND routed_to_human=0", (dataset_id,))
+            self.conn.commit()
+
     def get_events(self, dataset_id=None):
         if dataset_id:
             rows = self.conn.execute(

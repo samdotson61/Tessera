@@ -25,4 +25,4 @@ tessera = "tessera.cli:main"
 packages = ["tessera", "tessera.labelers", "tessera.engine"]
 
 [tool.setuptools.package-data]
-tessera = ["web/*"]
+tessera = ["web/*", "sample_data/*"]

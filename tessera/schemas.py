@@ -151,6 +151,7 @@ class GateResult:
     n_gold: int
     ece_before: float = 0.0
     ece_after: float = 0.0
+    cross_validated: bool = False   # True if achieved/ece are out-of-sample (CV)
 
 
 @dataclass

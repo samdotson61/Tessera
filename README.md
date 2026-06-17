@@ -16,15 +16,16 @@ data flywheel. *Tessera is a working codename — rename at will.*
 
 ```bash
 # Run the whole loop on the bundled sample dataset (support-ticket intents):
-python -m tessera demo --target 0.95
+python -m tessera --db demo.db demo --target 0.95
 
 # Then open the keyboard-first review UI for the items it routed to you:
 python -m tessera --db demo.db demo --serve     # http://127.0.0.1:8080
 
-# Label your own data:
-python -m tessera label --data my.jsonl --taxonomy my_taxonomy.json --gold my_gold.jsonl
-python -m tessera report  --dataset ds1
-python -m tessera export  --dataset ds1 --out labels.jsonl --pairs pairs.jsonl
+# Label your own data (the bundled sample doubles as a format example):
+python -m tessera label --data tessera/sample_data/intents.jsonl \
+    --taxonomy tessera/sample_data/taxonomy.json --gold tessera/sample_data/gold.jsonl --dataset ds1
+python -m tessera --db tessera.db report --dataset ds1
+python -m tessera --db tessera.db export --dataset ds1 --out labels.jsonl --pairs pairs.jsonl
 ```
 
 Run the tests:
@@ -103,8 +104,8 @@ tessera/            core package (stdlib only)
   server.py         stdlib review server (JSON API + static UI)
   web/              the keyboard-first review UI
   cli.py            `python -m tessera ...`
+  sample_data/      bundled support-intents dataset + taxonomy + gold (packaged)
 tests/              unittest suite (no third-party deps)
-sample_data/        bundled support-intents dataset + taxonomy + gold
 docs/               the full design suite (start at docs/README.md)
 ```
 
