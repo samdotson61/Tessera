@@ -26,6 +26,15 @@ This document turns the roadmap from the [product vision](01-product-vision-and-
 
 The single load-bearing idea: **the coverage@precision harness gates everything.** No prompt, calibration, router heuristic, or distilled model ships until the harness confirms it improved (or at least held) the north-star number on a held-out gold set. This is "eval-driven development," and it is the spine of the plan (§3).
 
+## 1a. Build status (June 2026)
+
+**Phase 0 (Wedge) and the core of Phase 1 (Trust) are built and shipped** — github.com/samdotson61/Tessera (private), 45 passing tests + CI. What actually shipped, and where it diverged from the plan below:
+
+- **Built:** the full loop (ingest → ensemble labelers → calibration → coverage@precision gate → keyboard-first review UI → flywheel event log → export), the gold-set harness, the adjustable precision slider, and the per-dataset quality report.
+- **Divergence — the wedge shipped on a pure-stdlib stack, not the production stack.** To make the MVP run anywhere with zero install, Phase 0 used SQLite (not Postgres), a stdlib HTTP server plus a custom keyboard-first web UI (not a Label Studio fork), and in-process orchestration (not Temporal). The production substitutions in [architecture](03-system-architecture.md) remain the target; the orchestration and model-layer interfaces are written so they slot in.
+- **Added during build:** cross-validated precision/ECE (the in-sample numbers were optimistic), plus an adversarial review pass that fixed a path-traversal bug, a gate/precision coherence bug, and non-idempotent event logging.
+- **Not yet built:** Phase 2 (closed active-learning retrain loop), Phase 3 (per-customer distillation), Phase 4 (cross-task Composer). The Phase 0 / Phase 1 sections below now read partly as a record of what was done; the remainder of Phase 1 through Phase 4 is the forward plan.
+
 ---
 
 ## 2. Team & skills assumptions

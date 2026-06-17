@@ -6,6 +6,8 @@ The interaction design that earns the "Cursor for data labeling" comparison: the
 
 Last updated: June 2026
 
+> **Status (June 2026):** the keyboard-first review loop is built in the MVP as a custom stdlib web UI (github.com/samdotson61/Tessera); the Label Studio fork described here remains the design target. See the [suite status](README.md).
+
 ---
 
 ## 1. UX principles

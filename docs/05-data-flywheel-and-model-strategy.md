@@ -6,6 +6,8 @@ How the human-correction stream becomes the moat: the path from bring-your-own f
 
 Last updated: June 2026
 
+> **Status (June 2026):** Phase A (bring-your-own-LLM) and the flywheel **event capture** are built in the MVP; per-customer distillation (Phase B) and the cross-task foundation labeler (Phase C) are designed, not yet built. See the [suite status](README.md).
+
 ---
 
 ## 1. The flywheel — and the Cursor/Composer parallel

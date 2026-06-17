@@ -6,6 +6,8 @@ How the system is built: the services, how data flows between them, the stack th
 
 Last updated: June 2026
 
+> **Build status (June 2026):** a runnable MVP implementing a **pure-stdlib subset** of this architecture is live at github.com/samdotson61/Tessera. This document describes the **production target**. The MVP currently substitutes SQLite for Postgres, a stdlib HTTP server + a custom keyboard-first web UI for the FastAPI services + Label Studio fork, in-process orchestration for Temporal, and on-disk/SQLite storage for the object store + vector DB. The component boundaries and contracts below are unchanged — these are swaps behind existing seams (see §7's "start-simple escape hatch"). See [doc 08](08-implementation-and-development-plan.md) for what is built vs. planned.
+
 ---
 
 ## 1. Architecture goals & principles

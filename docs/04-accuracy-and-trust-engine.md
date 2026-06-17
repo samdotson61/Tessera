@@ -6,6 +6,8 @@ The technical core that makes "accurate labels you don't have to re-check" real,
 
 Last updated: June 2026
 
+> **Status (June 2026):** the mechanisms here are implemented in the shipped MVP — confidence ensemble, isotonic calibration (weighted PAV), cross-validated coverage@precision, the confidence gate, the active-learning queue order, gold-set sampling, and the quality report all exist in code (github.com/samdotson61/Tessera). See the [suite status](README.md).
+
 ---
 
 ## 1. Why this is make-or-break

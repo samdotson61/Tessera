@@ -112,10 +112,12 @@ The loop's promise in one sentence: **"we auto-label 70% of your data at 98% pre
 
 ## 9. MVP definition
 
-The MVP is **Phase 0 (Wedge) + Phase 1 (Trust)** from the [implementation plan](08-implementation-and-development-plan.md), which carries the full detail. In brief:
+The MVP is **Phase 0 (Wedge) + Phase 1 (Trust)** from the [implementation plan](08-implementation-and-development-plan.md), which carries the full detail.
+
+**Status (June 2026): built and shipped** — github.com/samdotson61/Tessera (a pure-stdlib implementation; 45 tests + CI). The in-scope list below is delivered, with one divergence noted. In brief:
 
 **In scope:**
-- Fork Label Studio; add LLM pre-labeling via one bring-your-own-labeler API (Claude / GPT / local).
+- LLM pre-labeling via one bring-your-own-labeler API (Claude / GPT / local), on a custom keyboard-first UI. *(Shipped as a stdlib web UI rather than a Label Studio fork; the fork remains the design target — see [architecture](03-system-architecture.md).)*
 - Confidence estimation + calibration against a human-labeled gold set.
 - Confidence-gated auto-apply with an adjustable precision slider.
 - Keyboard-first review queue: pre-filled label, one-key accept / correct / reject.

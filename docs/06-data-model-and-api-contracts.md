@@ -6,6 +6,8 @@ The entities, schemas, and the REST/SDK surface the whole system is built on —
 
 Last updated: June 2026
 
+> **Status (June 2026):** implemented in the MVP as a pure-stdlib subset — Python dataclasses + SQLite, with the flywheel event schema as built. The Postgres / object-store / vector-DB split and the FastAPI REST surface below are the production target. See the [suite status](README.md).
+
 ---
 
 ## 1. Entity overview
