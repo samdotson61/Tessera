@@ -1,0 +1,181 @@
+"""Core data schemas (stdlib dataclasses).
+
+Mirrors the entities in docs/06-data-model-and-api-contracts.md, kept lightweight
+(no pydantic) so the MVP runs on the standard library alone.
+"""
+from __future__ import annotations
+
+import dataclasses
+import json
+import time
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Optional
+
+
+def now_iso() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+class LabelType(str, Enum):
+    CLASSIFICATION = "classification"   # single-label (MVP focus)
+    SPAN = "span"                       # NER / span highlighting (future)
+    PAIRWISE = "pairwise"               # A-vs-B preference (future)
+
+
+class HumanAction(str, Enum):
+    ACCEPT = "accept"
+    EDIT = "edit"
+    REJECT = "reject"
+
+
+@dataclass
+class Dataset:
+    id: str
+    name: str = ""
+    created_at: str = field(default_factory=now_iso)
+
+
+@dataclass
+class Item:
+    id: str
+    dataset_id: str
+    text: str
+    meta: dict = field(default_factory=dict)
+    final_label: Optional[str] = None
+
+
+@dataclass
+class Taxonomy:
+    id: str
+    name: str
+    version: int = 1
+    label_type: str = LabelType.CLASSIFICATION.value
+    labels: list = field(default_factory=list)
+    definitions: dict = field(default_factory=dict)   # label -> definition text
+    guidelines: str = ""
+
+    def allowed_labels(self) -> list:
+        return list(self.labels)
+
+    def to_prompt(self) -> str:
+        lines = [
+            "Task: assign exactly one label to the text below.",
+            f"Guidelines: {self.guidelines}".rstrip(),
+            "Labels:",
+        ]
+        for lab in self.labels:
+            d = self.definitions.get(lab, "")
+            lines.append(f"- {lab}: {d}" if d else f"- {lab}")
+        lines.append('Respond ONLY as JSON: {"label": <one label>, "confidence": <0..1>, "rationale": <short>}')
+        return "\n".join(lines)
+
+
+@dataclass
+class LabelOutput:
+    """One model's output for one item: a probability distribution over labels."""
+    model_id: str
+    distribution: dict = field(default_factory=dict)  # label -> prob (sums ~1)
+    rationale: str = ""
+
+    def top(self):
+        if not self.distribution:
+            return (None, 0.0)
+        lab = max(self.distribution, key=self.distribution.get)
+        return (lab, self.distribution[lab])
+
+
+@dataclass
+class Prediction:
+    item_id: str
+    dataset_id: str
+    taxonomy_id: str
+    label: str
+    confidence_raw: float
+    confidence_calibrated: Optional[float] = None
+    agreement: float = 1.0
+    rationale: str = ""
+    votes: dict = field(default_factory=dict)         # model_id -> label
+    distribution: dict = field(default_factory=dict)  # ensemble label -> prob
+    auto_applied: Optional[bool] = None
+    routed: Optional[bool] = None
+    source: str = ""
+
+    def confidence(self) -> float:
+        """Calibrated confidence if available, else raw."""
+        return self.confidence_calibrated if self.confidence_calibrated is not None else self.confidence_raw
+
+
+@dataclass
+class GoldItem:
+    item_id: str
+    dataset_id: str
+    label: str
+
+
+@dataclass
+class Event:
+    """Canonical flywheel event — see docs/06. Every interaction becomes one row."""
+    item_id: str
+    dataset_id: str
+    model_id: str = ""
+    model_label: str = ""
+    model_rationale: str = ""
+    confidence_raw: float = 0.0
+    confidence_calibrated: Optional[float] = None
+    ensemble_votes: dict = field(default_factory=dict)
+    weak_supervision_votes: dict = field(default_factory=dict)
+    routed_to_human: bool = False
+    route_reason: str = ""
+    human_action: Optional[str] = None
+    final_label: Optional[str] = None
+    human_rationale: Optional[str] = None
+    taxonomy_version: int = 1
+    rubric_snapshot: str = ""
+    modality: str = "text"
+    input_ref: str = ""
+    latency_ms: float = 0.0
+    cost_usd: float = 0.0
+    annotator_id: str = ""
+    timestamp: str = field(default_factory=now_iso)
+
+
+@dataclass
+class GateResult:
+    target_precision: float
+    threshold: float
+    coverage: float
+    achieved_precision: float
+    n_auto: int
+    n_queue: int
+    n_gold: int
+    ece_before: float = 0.0
+    ece_after: float = 0.0
+
+
+@dataclass
+class QualityReport:
+    dataset_id: str
+    taxonomy_version: int
+    target_precision: float
+    threshold: float
+    coverage: float
+    achieved_precision: float
+    per_label_precision: dict = field(default_factory=dict)
+    n_items: int = 0
+    n_auto: int = 0
+    n_queue: int = 0
+    n_gold: int = 0
+    ece: float = 0.0
+    caveats: list = field(default_factory=list)
+    generated_at: str = field(default_factory=now_iso)
+
+
+def to_dict(obj) -> dict:
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return dataclasses.asdict(obj)
+    raise TypeError(f"not a dataclass instance: {type(obj)}")
+
+
+def to_json(obj, indent=None) -> str:
+    return json.dumps(to_dict(obj), indent=indent, default=str)

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tessera — Review</title>
+<link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+<header>
+  <div class="brand">Tessera <span class="tag">review</span></div>
+  <div class="stats" id="stats">loading…</div>
+</header>
+
+<main>
+  <section class="trust">
+    <div class="trust-row">
+      <label for="target">Target precision: <b id="targetVal">95%</b></label>
+      <input type="range" id="target" min="0.50" max="0.999" step="0.005" value="0.95" />
+      <button id="regate" title="Recompute the gate at this target">Re-gate</button>
+    </div>
+    <div id="coverage" class="coverage">—</div>
+  </section>
+
+  <section class="card" id="card">
+    <div class="empty" id="empty" hidden>
+      🎉 Queue empty — every uncertain item has been reviewed. Auto-labeled items
+      were applied without you. Export from the CLI: <code>python -m tessera export</code>.
+    </div>
+    <div id="reviewer" hidden>
+      <div class="meta">
+        <span id="progress"></span>
+        <span class="conf" id="conf"></span>
+      </div>
+      <div class="text" id="text"></div>
+      <div class="suggestion">
+        suggested: <b id="suggested"></b>
+        <button class="explain" id="explainBtn">explain (e)</button>
+      </div>
+      <div class="rationale" id="rationale" hidden></div>
+      <div class="labels" id="labels"></div>
+      <div class="hint">
+        <b>Enter</b>/<b>A</b> accept · <b>1–9</b> pick a label (correct) ·
+        <b>R</b> reject · <b>J/K</b> next/prev · <b>E</b> explain
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

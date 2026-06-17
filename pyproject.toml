@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tessera-label"
+version = "0.1.0"
+description = "Cursor for data labeling — auto-label the easy majority at a guaranteed precision, route the rest to a human, and flywheel the corrections into your own models."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Sam Dotson" }]
+keywords = ["data-labeling", "annotation", "active-learning", "llm", "weak-supervision"]
+# The MVP core has NO third-party runtime dependencies (pure standard library).
+dependencies = []
+
+[project.optional-dependencies]
+# Real LLM labelers work over stdlib urllib, so even these are optional conveniences.
+dev = ["pytest>=7"]
+
+[project.scripts]
+tessera = "tessera.cli:main"
+
+[tool.setuptools]
+packages = ["tessera", "tessera.labelers", "tessera.engine"]
+
+[tool.setuptools.package-data]
+tessera = ["web/*"]

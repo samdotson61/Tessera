@@ -1,0 +1,16 @@
+{
+  "id": "support-intents",
+  "name": "Support ticket intents",
+  "version": 1,
+  "label_type": "classification",
+  "labels": ["billing", "technical", "account", "sales", "cancellation", "feedback"],
+  "definitions": {
+    "billing": "invoice payment charge charged refund bill subscription price cost overcharge receipt",
+    "technical": "error bug crash crashes broken login password reset app website loading slow fix blank",
+    "account": "account profile email address update settings username change access locked picture",
+    "sales": "pricing plans upgrade demo purchase buy quote enterprise features trial annual discount",
+    "cancellation": "cancel cancellation unsubscribe close terminate stop refund renewal membership contract",
+    "feedback": "love great feedback suggestion feature request improve experience thanks awesome dark mode"
+  },
+  "guidelines": "Classify each support message by its primary intent. A refund for a wrong charge is billing; a refund in the context of stopping service is cancellation. Prefer the dominant action the user is asking for."
+}
