@@ -1,0 +1,5 @@
+{
+  "_comment": "North-star regression baselines (docs/08 principle #1: eval-driven development). The demo pipelines are deterministic, so any drop below these numbers means a change regressed coverage@precision on the fixed gold sets. Update deliberately — only when a change intentionally improves the number — and say so in the commit message.",
+  "intents": {"target_precision": 0.95, "min_coverage": 0.8333, "min_achieved_precision": 0.95},
+  "pairwise": {"target_precision": 0.95, "min_coverage": 0.85, "min_achieved_precision": 0.95}
+}
