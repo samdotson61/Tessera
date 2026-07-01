@@ -163,6 +163,28 @@ def _event_for(p, taxonomy, routed, human_action=None, final_label="__model__"):
         taxonomy_version=taxonomy.version, rubric_snapshot=taxonomy.guidelines[:200])
 
 
+def undo_last_human_action(storage, dataset_id):
+    """Revert the most recent human accept/edit/reject on a dataset.
+
+    The event is removed, human-grown gold for the item is dropped, the final
+    label rolls back to the previous human decision (or none), and the item
+    returns to the review queue. Returns the item_id, or None if nothing to undo.
+    """
+    e = storage.get_last_human_event(dataset_id)
+    if e is None:
+        return None
+    storage.delete_event(e.id)
+    storage.remove_gold(e.item_id, source="human")
+    remaining = storage.get_human_events_for_item(e.item_id)
+    storage.set_final_label(e.item_id, remaining[-1].final_label if remaining else None)
+    p = storage.get_prediction(e.item_id)
+    if p is not None:
+        p.routed = True
+        p.auto_applied = False
+        storage.upsert_prediction(p)
+    return e.item_id
+
+
 def record_human_action(storage, taxonomy, item_id, action, label=None, annotator="human",
                         grow_gold=False):
     """Apply a human decision to a queued item and log the event. Returns the final label.

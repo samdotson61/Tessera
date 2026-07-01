@@ -7,7 +7,7 @@ caveats about where auto-labeling is NOT trusted.
 from __future__ import annotations
 
 from .schemas import QualityReport
-from .engine.metrics import precision_recall_f1
+from .engine.metrics import precision_recall_f1, reliability_bins
 
 
 def build_quality_report(storage, dataset_id, taxonomy, gate_result):
@@ -15,13 +15,15 @@ def build_quality_report(storage, dataset_id, taxonomy, gate_result):
     gold = storage.get_gold(dataset_id)
     by_item = {p.item_id: p for p in preds}
 
-    y_true, y_pred = [], []
+    y_true, y_pred, g_confs, g_correct = [], [], [], []
     for item_id, true_label in gold.items():
         p = by_item.get(item_id)
         if not p:
             continue
         y_true.append(true_label)
         y_pred.append(p.label)
+        g_confs.append(p.confidence())
+        g_correct.append(p.label == true_label)
     prf = precision_recall_f1(y_true, y_pred, taxonomy.labels)
     per_label = {k: round(v["precision"], 3) for k, v in prf["per_label"].items()}
 
@@ -59,4 +61,5 @@ def build_quality_report(storage, dataset_id, taxonomy, gate_result):
         ece=round(gate_result.ece_after, 4),
         coverage_ci=([round(v, 4) for v in gate_result.coverage_ci]
                      if gate_result.coverage_ci else None),
+        reliability_bins=reliability_bins(g_confs, g_correct),
         caveats=caveats)

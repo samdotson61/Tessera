@@ -155,6 +155,7 @@ class Event:
     cost_usd: float = 0.0
     annotator_id: str = ""
     timestamp: str = field(default_factory=now_iso)
+    id: Optional[int] = None    # storage row id, populated on read (for undo)
 
 
 @dataclass
@@ -188,6 +189,7 @@ class QualityReport:
     n_gold: int = 0
     ece: float = 0.0
     coverage_ci: Optional[list] = None    # [lo, hi] bootstrap 95% CI on gold coverage
+    reliability_bins: list = field(default_factory=list)  # calibrated conf vs accuracy per bin
     caveats: list = field(default_factory=list)
     generated_at: str = field(default_factory=now_iso)
 

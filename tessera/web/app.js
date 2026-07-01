@@ -115,7 +115,87 @@ function toggleExplain() {
   rat.hidden = !rat.hidden;
 }
 
+async function undo() {
+  try {
+    const r = await postJSON("/api/undo", {});
+    if (r.ok) { await refreshState(); await refreshQueue(); }
+  } catch (e) { /* nothing to undo */ }
+}
+
+function reliabilitySvg(bins) {
+  const NS = "http://www.w3.org/2000/svg";
+  const W = 280, H = 230, m = { l: 40, r: 12, t: 12, b: 34 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const X = (v) => m.l + v * pw;
+  const Y = (v) => m.t + (1 - v) * ph;
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("width", W);
+  const el = (tag, attrs, text) => {
+    const n = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    if (text) n.textContent = text;
+    svg.appendChild(n);
+    return n;
+  };
+  // axes + perfect-calibration diagonal
+  el("line", { x1: X(0), y1: Y(0), x2: X(1), y2: Y(0), class: "rel-axis" });
+  el("line", { x1: X(0), y1: Y(0), x2: X(0), y2: Y(1), class: "rel-axis" });
+  el("line", { x1: X(0), y1: Y(0), x2: X(1), y2: Y(1), class: "rel-diag" });
+  for (const v of [0, 0.5, 1]) {
+    el("text", { x: X(v), y: Y(0) + 14, class: "rel-tick", "text-anchor": "middle" }, v.toFixed(1));
+    el("text", { x: X(0) - 6, y: Y(v) + 4, class: "rel-tick", "text-anchor": "end" }, v.toFixed(1));
+  }
+  el("text", { x: X(0.5), y: H - 4, class: "rel-label", "text-anchor": "middle" },
+     "calibrated confidence");
+  const yl = el("text", { x: 10, y: Y(0.5), class: "rel-label", "text-anchor": "middle" },
+                "accuracy");
+  yl.setAttribute("transform", `rotate(-90 10 ${Y(0.5)})`);
+  const maxN = Math.max(1, ...bins.map((b) => b.count));
+  bins.forEach((b) => {
+    const c = el("circle", {
+      cx: X(b.avg_conf), cy: Y(b.accuracy),
+      r: 3 + 6 * Math.sqrt(b.count / maxN), class: "rel-dot",
+    });
+    c.appendChild(Object.assign(document.createElementNS(NS, "title"), {
+      textContent: `conf ${b.avg_conf} · acc ${b.accuracy} · n=${b.count}`,
+    }));
+  });
+  return svg;
+}
+
+async function toggleReport() {
+  const sec = document.getElementById("report");
+  if (!sec.hidden) { sec.hidden = true; return; }
+  let rep;
+  try { rep = await getJSON("/api/report"); } catch (e) { return; }
+  if (!rep || rep.error) return;
+  const body = document.getElementById("reportBody");
+  body.innerHTML = "";
+  const head = document.createElement("div");
+  head.className = "rep-head";
+  const ci = rep.coverage_ci
+    ? ` (95% CI ${fmtPct(rep.coverage_ci[0])}–${fmtPct(rep.coverage_ci[1])})`
+    : "";
+  head.textContent =
+    `coverage ${fmtPct(rep.coverage)}${ci} at ≥ ${fmtPct(rep.target_precision)} target · ` +
+    `achieved ${fmtPct(rep.achieved_precision)} · ECE ${rep.ece} · gold n=${rep.n_gold}`;
+  body.appendChild(head);
+  body.appendChild(reliabilitySvg(rep.reliability_bins || []));
+  const ul = document.createElement("ul");
+  ul.className = "rep-caveats";
+  (rep.caveats || []).forEach((c) => {
+    const li = document.createElement("li");
+    li.textContent = c;
+    ul.appendChild(li);
+  });
+  body.appendChild(ul);
+  sec.hidden = false;
+}
+
 document.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() === "u") { undo(); return; }         // works even with an empty queue
+  if (e.key.toLowerCase() === "q") { toggleReport(); return; }
   if (document.getElementById("reviewer").hidden) return;
   const item = queue[idx];
   if (!item) return;
@@ -140,5 +220,6 @@ document.getElementById("regate").addEventListener("click", async () => {
   await refreshQueue();
 });
 document.getElementById("explainBtn").addEventListener("click", toggleExplain);
+document.getElementById("reportBtn").addEventListener("click", toggleReport);
 
 (async function init() { await refreshState(); await refreshQueue(); })();

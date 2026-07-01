@@ -44,3 +44,12 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
 .pair { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 15px; }
 .pair-suggested { border-color: var(--accent); }
 .pair-head { color: var(--accent); font-weight: 700; margin-bottom: 6px; }
+#report { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+.rep-head { font-size: 13px; margin-bottom: 8px; }
+.rep-caveats { color: var(--muted); font-size: 12px; margin: 8px 0 0; padding-left: 18px; }
+#report svg { background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; }
+.rel-axis { stroke: var(--border); stroke-width: 1; }
+.rel-diag { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; }
+.rel-dot { fill: var(--accent); fill-opacity: .75; }
+.rel-tick { fill: var(--muted); font-size: 10px; }
+.rel-label { fill: var(--muted); font-size: 11px; }

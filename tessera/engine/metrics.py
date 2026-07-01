@@ -76,6 +76,27 @@ def bootstrap_coverage_ci(confs, correct, target_precision, n_boot=200, seed=0):
     return (lo, hi)
 
 
+def reliability_bins(confs, correct, n_bins=10):
+    """Per-bin (avg confidence, accuracy, count) — the data behind a reliability
+    diagram. Empty bins are omitted."""
+    sums = [0.0] * n_bins
+    conf_sums = [0.0] * n_bins
+    counts = [0] * n_bins
+    for c, ok in zip(confs, correct):
+        b = min(n_bins - 1, int(c * n_bins))
+        sums[b] += 1.0 if ok else 0.0
+        conf_sums[b] += c
+        counts[b] += 1
+    out = []
+    for i in range(n_bins):
+        if counts[i]:
+            out.append({"lo": i / n_bins, "hi": (i + 1) / n_bins,
+                        "avg_conf": round(conf_sums[i] / counts[i], 4),
+                        "accuracy": round(sums[i] / counts[i], 4),
+                        "count": counts[i]})
+    return out
+
+
 def ece(confs, correct, n_bins=10):
     """Expected Calibration Error: average |confidence - accuracy| weighted by bin size."""
     if not confs:

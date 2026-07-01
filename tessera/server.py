@@ -14,7 +14,7 @@ from urllib.parse import urlparse, parse_qs
 from .schemas import to_dict
 from .engine.router import order_queue
 from .labelers.judge import make_judge
-from .pipeline import record_human_action, calibrate_and_gate
+from .pipeline import record_human_action, calibrate_and_gate, undo_last_human_action
 from .quality import build_quality_report
 from .flywheel import event_stats
 
@@ -112,6 +112,12 @@ def make_handler(ctx: Context):
                 except (KeyError, ValueError) as e:
                     return self._json({"error": str(e)}, 400)
                 return self._json({"ok": True, "final_label": final})
+
+            if path == "/api/undo":
+                item_id = undo_last_human_action(ctx.storage, ctx.dataset_id)
+                if item_id is None:
+                    return self._json({"error": "nothing to undo"}, 400)
+                return self._json({"ok": True, "item_id": item_id})
 
             if path == "/api/gate":
                 target = float(body.get("target_precision", ctx.settings.target_precision))

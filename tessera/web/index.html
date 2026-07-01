@@ -18,8 +18,10 @@
       <label for="target">Target precision: <b id="targetVal">95%</b></label>
       <input type="range" id="target" min="0.50" max="0.999" step="0.005" value="0.95" />
       <button id="regate" title="Recompute the gate at this target">Re-gate</button>
+      <button id="reportBtn" title="Quality report + reliability diagram (Q)">Report</button>
     </div>
     <div id="coverage" class="coverage">—</div>
+    <div id="report" hidden><div id="reportBody"></div></div>
   </section>
 
   <section class="card" id="card">
@@ -41,7 +43,8 @@
       <div class="labels" id="labels"></div>
       <div class="hint">
         <b>Enter</b>/<b>A</b> accept · <b>1–9</b> pick a label (correct) ·
-        <b>R</b> reject · <b>J/K</b> next/prev · <b>E</b> explain
+        <b>R</b> reject · <b>U</b> undo · <b>J/K</b> next/prev · <b>E</b> explain ·
+        <b>Q</b> report
       </div>
     </div>
   </section>

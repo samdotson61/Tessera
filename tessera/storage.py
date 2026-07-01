@@ -201,6 +201,23 @@ class Storage:
             self.conn.commit()
             return cur.lastrowid
 
+    def get_last_human_event(self, dataset_id):
+        r = self.conn.execute(
+            "SELECT * FROM events WHERE dataset_id=? AND routed_to_human=1 "
+            "ORDER BY id DESC LIMIT 1", (dataset_id,)).fetchone()
+        return self._row_event(r) if r else None
+
+    def get_human_events_for_item(self, item_id):
+        rows = self.conn.execute(
+            "SELECT * FROM events WHERE item_id=? AND routed_to_human=1 ORDER BY id",
+            (item_id,)).fetchall()
+        return [self._row_event(r) for r in rows]
+
+    def delete_event(self, event_id):
+        with self._lock:
+            self.conn.execute("DELETE FROM events WHERE id=?", (event_id,))
+            self.conn.commit()
+
     def delete_auto_events(self, dataset_id):
         """Remove prior auto-apply (non-human) events for a dataset so re-gating is
         idempotent. Human-action events (routed_to_human=1) are preserved."""
@@ -229,7 +246,7 @@ class Storage:
             human_rationale=r["human_rationale"], taxonomy_version=r["taxonomy_version"],
             rubric_snapshot=r["rubric_snapshot"], modality=r["modality"], input_ref=r["input_ref"],
             latency_ms=r["latency_ms"], cost_usd=r["cost_usd"], annotator_id=r["annotator_id"],
-            timestamp=r["timestamp"])
+            timestamp=r["timestamp"], id=r["id"])
 
     def counts(self, dataset_id) -> dict:
         c = self.conn.execute
