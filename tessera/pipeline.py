@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 
-from .schemas import Prediction, Event, GateResult, HumanAction
+from .schemas import Prediction, Event, GateResult, GoldItem, HumanAction
 from .engine import confidence as conf_mod
 from .engine.verify import deterministic_checks
 from .engine.calibration import fit_calibrator, cross_val_metrics
-from .engine.metrics import coverage_at_precision, ece
+from .engine.metrics import coverage_at_precision, ece, bootstrap_coverage_ci
 from .engine.gating import apply_gate
 
 
@@ -98,11 +98,15 @@ def calibrate_and_gate(storage, dataset_id, taxonomy, target_precision, settings
         achieved = cv["achieved"]
         ece_after = cv["ece"]
         cross_validated = True
+        # CI from the out-of-fold values, so it inherits the honest estimate.
+        ci = bootstrap_coverage_ci(cv["oof"], correct, target_precision)
     else:
         threshold, _gold_cov, achieved = coverage_at_precision(
             cal_confs, cal_correct, target_precision)
         ece_after = ece(cal_confs, cal_correct) if cal_confs else 0.0
         cross_validated = False
+        ci = bootstrap_coverage_ci(cal_confs, cal_correct, target_precision) \
+            if cal_confs else None
 
     n_auto, n_queue = apply_gate(preds, threshold)
 
@@ -142,7 +146,8 @@ def calibrate_and_gate(storage, dataset_id, taxonomy, target_precision, settings
         target_precision=target_precision, threshold=threshold, coverage=full_coverage,
         achieved_precision=achieved, n_auto=n_auto, n_queue=n_queue,
         n_gold=len(cal_confs), ece_before=ece_before, ece_after=ece_after,
-        cross_validated=cross_validated, n_judge_vetoed=n_vetoed)
+        cross_validated=cross_validated, n_judge_vetoed=n_vetoed,
+        coverage_ci=(list(ci) if ci else None))
 
 
 def _event_for(p, taxonomy, routed, human_action=None, final_label="__model__"):
@@ -158,8 +163,14 @@ def _event_for(p, taxonomy, routed, human_action=None, final_label="__model__"):
         taxonomy_version=taxonomy.version, rubric_snapshot=taxonomy.guidelines[:200])
 
 
-def record_human_action(storage, taxonomy, item_id, action, label=None, annotator="human"):
-    """Apply a human decision to a queued item and log the event. Returns the final label."""
+def record_human_action(storage, taxonomy, item_id, action, label=None, annotator="human",
+                        grow_gold=False):
+    """Apply a human decision to a queued item and log the event. Returns the final label.
+
+    grow_gold=True also records the accepted/edited label as gold (source
+    "human") — docs/04's gold-set growth, so calibration tightens run over run.
+    Seed gold rows are never overwritten by grown ones.
+    """
     p = storage.get_prediction(item_id)
     if p is None:
         raise ValueError(f"no prediction for item {item_id}")
@@ -174,6 +185,9 @@ def record_human_action(storage, taxonomy, item_id, action, label=None, annotato
 
     if final is not None:
         storage.set_final_label(item_id, final)
+        if grow_gold and item_id not in storage.get_gold(p.dataset_id):
+            storage.add_gold([GoldItem(item_id=item_id, dataset_id=p.dataset_id,
+                                       label=final, source="human")])
     e = _event_for(p, taxonomy, routed=True, human_action=action, final_label=final)
     e.annotator_id = annotator
     storage.append_event(e)

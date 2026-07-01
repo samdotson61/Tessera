@@ -35,6 +35,7 @@ class Settings:
     workers: int = 8                  # concurrent items in the labeling pass
     judge_provider: str = ""          # LLM-as-judge: "anthropic" | "openai" | "" (off).
     judge_model: str = ""             # judge model override; pick a different family than the labeler
+    grow_gold: bool = True            # record human accept/edit decisions as gold (source "human")
     host: str = "127.0.0.1"
     port: int = 8080
 
@@ -55,6 +56,7 @@ class Settings:
             workers=int(os.environ.get("TESSERA_WORKERS", "8")),
             judge_provider=os.environ.get("TESSERA_JUDGE", ""),
             judge_model=os.environ.get("TESSERA_JUDGE_MODEL", ""),
+            grow_gold=os.environ.get("TESSERA_GROW_GOLD", "1") not in ("0", "false", "no"),
             host=os.environ.get("TESSERA_HOST", "127.0.0.1"),
             port=int(os.environ.get("TESSERA_PORT", "8080")),
         )

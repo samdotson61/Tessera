@@ -51,6 +51,31 @@ def coverage_at_precision(confs, correct, target_precision):
     return best
 
 
+def bootstrap_coverage_ci(confs, correct, target_precision, n_boot=200, seed=0):
+    """Percentile bootstrap CI for coverage@precision.
+
+    Each resample redraws the gold set with replacement and re-runs the whole
+    threshold-selection procedure, so the interval reflects how much the
+    reported coverage depends on which gold items we happened to label.
+    Returns (lo, hi) at 2.5/97.5 percentiles; (0.0, 0.0) with no data.
+    """
+    import random
+    n = len(confs)
+    if n == 0:
+        return (0.0, 0.0)
+    rng = random.Random(seed)
+    covs = []
+    for _ in range(n_boot):
+        idx = [rng.randrange(n) for _ in range(n)]
+        _, cov, _ = coverage_at_precision([confs[i] for i in idx],
+                                          [correct[i] for i in idx], target_precision)
+        covs.append(cov)
+    covs.sort()
+    lo = covs[max(0, int(0.025 * n_boot) - 1)]
+    hi = covs[min(n_boot - 1, int(0.975 * n_boot))]
+    return (lo, hi)
+
+
 def ece(confs, correct, n_bins=10):
     """Expected Calibration Error: average |confidence - accuracy| weighted by bin size."""
     if not confs:

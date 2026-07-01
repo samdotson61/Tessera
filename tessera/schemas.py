@@ -127,6 +127,7 @@ class GoldItem:
     item_id: str
     dataset_id: str
     label: str
+    source: str = "seed"    # "seed" (curated) | "human" (grown from review decisions)
 
 
 @dataclass
@@ -169,6 +170,7 @@ class GateResult:
     ece_after: float = 0.0
     cross_validated: bool = False   # True if achieved/ece are out-of-sample (CV)
     n_judge_vetoed: int = 0         # auto-apply candidates the LLM judge routed to a human
+    coverage_ci: Optional[list] = None   # [lo, hi] bootstrap 95% CI on gold coverage
 
 
 @dataclass
@@ -185,6 +187,7 @@ class QualityReport:
     n_queue: int = 0
     n_gold: int = 0
     ece: float = 0.0
+    coverage_ci: Optional[list] = None    # [lo, hi] bootstrap 95% CI on gold coverage
     caveats: list = field(default_factory=list)
     generated_at: str = field(default_factory=now_iso)
 

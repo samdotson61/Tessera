@@ -131,4 +131,5 @@ def cross_val_metrics(kind, confs, correct, target_precision, k=5, min_points=10
         for i in folds[f]:
             oof[i] = cal.transform(confs[i])
     thr, cov, prec = coverage_at_precision(oof, correct, target_precision)
-    return {"threshold": thr, "coverage": cov, "achieved": prec, "ece": ece(oof, correct)}
+    return {"threshold": thr, "coverage": cov, "achieved": prec, "ece": ece(oof, correct),
+            "oof": oof}

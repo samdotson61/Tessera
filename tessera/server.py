@@ -107,7 +107,8 @@ def make_handler(ctx: Context):
                 try:
                     final = record_human_action(
                         ctx.storage, ctx.taxonomy, body["item_id"], body["action"],
-                        label=body.get("label"), annotator=body.get("annotator", "human"))
+                        label=body.get("label"), annotator=body.get("annotator", "human"),
+                        grow_gold=ctx.settings.grow_gold)
                 except (KeyError, ValueError) as e:
                     return self._json({"error": str(e)}, 400)
                 return self._json({"ok": True, "final_label": final})

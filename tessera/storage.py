@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS predictions (
     votes_json TEXT, distribution_json TEXT, auto_applied INTEGER, routed INTEGER, source TEXT
 );
 CREATE TABLE IF NOT EXISTS gold (
-    item_id TEXT PRIMARY KEY, dataset_id TEXT, label TEXT
+    item_id TEXT PRIMARY KEY, dataset_id TEXT, label TEXT, source TEXT DEFAULT 'seed'
 );
 CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY AUTOINCREMENT, item_id TEXT, dataset_id TEXT,
@@ -62,6 +62,10 @@ class Storage:
         self._lock = threading.Lock()
         with self._lock:
             self.conn.executescript(SCHEMA)
+            try:  # migrate pre-source gold tables in place
+                self.conn.execute("ALTER TABLE gold ADD COLUMN source TEXT DEFAULT 'seed'")
+            except sqlite3.OperationalError:
+                pass
             self.conn.commit()
 
     def close(self):
@@ -153,13 +157,30 @@ class Storage:
     # ---- gold ----
     def add_gold(self, gold_items):
         with self._lock:
-            self.conn.executemany("INSERT OR REPLACE INTO gold VALUES (?,?,?)",
-                                  [(g.item_id, g.dataset_id, g.label) for g in gold_items])
+            self.conn.executemany(
+                "INSERT OR REPLACE INTO gold VALUES (?,?,?,?)",
+                [(g.item_id, g.dataset_id, g.label, g.source) for g in gold_items])
             self.conn.commit()
 
     def get_gold(self, dataset_id) -> dict:
         rows = self.conn.execute("SELECT * FROM gold WHERE dataset_id=?", (dataset_id,)).fetchall()
         return {r["item_id"]: r["label"] for r in rows}
+
+    def remove_gold(self, item_id, source=None):
+        """Delete one gold row (optionally only if it came from the given source)."""
+        with self._lock:
+            if source is None:
+                self.conn.execute("DELETE FROM gold WHERE item_id=?", (item_id,))
+            else:
+                self.conn.execute("DELETE FROM gold WHERE item_id=? AND source=?",
+                                  (item_id, source))
+            self.conn.commit()
+
+    def count_gold_by_source(self, dataset_id) -> dict:
+        rows = self.conn.execute(
+            "SELECT source, COUNT(*) AS n FROM gold WHERE dataset_id=? GROUP BY source",
+            (dataset_id,)).fetchall()
+        return {r["source"]: r["n"] for r in rows}
 
     # ---- events ----
     def append_event(self, e: Event) -> int:

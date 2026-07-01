@@ -33,6 +33,11 @@ def build_quality_report(storage, dataset_id, taxonomy, gate_result):
         caveats.append("No items met the precision target; everything was routed to humans. "
                        "Lower the target, improve the rubric, or add gold.")
     caveats.append("Rare classes and out-of-distribution items are never auto-applied without audit.")
+    n_human_gold = storage.count_gold_by_source(dataset_id).get("human", 0)
+    if n_human_gold:
+        caveats.append(f"{n_human_gold} gold item(s) were grown from human review decisions; "
+                       "they over-represent low-confidence items, so per-band calibration "
+                       "there is better sampled but the seed gold remains the unbiased core.")
     if gate_result.n_judge_vetoed:
         caveats.append(f"LLM judge vetoed {gate_result.n_judge_vetoed} auto-apply candidate(s) "
                        "to the human queue; reported coverage is post-veto.")
@@ -51,4 +56,7 @@ def build_quality_report(storage, dataset_id, taxonomy, gate_result):
         achieved_precision=round(gate_result.achieved_precision, 4),
         per_label_precision=per_label, n_items=len(preds),
         n_auto=gate_result.n_auto, n_queue=gate_result.n_queue, n_gold=gate_result.n_gold,
-        ece=round(gate_result.ece_after, 4), caveats=caveats)
+        ece=round(gate_result.ece_after, 4),
+        coverage_ci=([round(v, 4) for v in gate_result.coverage_ci]
+                     if gate_result.coverage_ci else None),
+        caveats=caveats)
