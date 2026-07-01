@@ -71,7 +71,7 @@ def run_full(storage, dataset_id, taxonomy, settings, target_precision=None):
     """Run the labeling pass then calibrate + gate. Returns GateResult."""
     target = target_precision if target_precision is not None else settings.target_precision
     labelers = make_labelers(settings)
-    run_labeling_pass(storage, dataset_id, taxonomy, labelers)
+    run_labeling_pass(storage, dataset_id, taxonomy, labelers, workers=settings.workers)
     return calibrate_and_gate(storage, dataset_id, taxonomy, target, settings)
 
 

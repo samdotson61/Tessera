@@ -30,6 +30,9 @@ class Settings:
     min_gold_for_calibration: int = 10
     anthropic_api_key: str = ""
     openai_api_key: str = ""
+    llm_samples: int = 5              # self-consistency samples per item (LLM labelers)
+    cache_path: str = "tessera_cache.db"   # LLM response cache; "none" disables
+    workers: int = 8                  # concurrent items in the labeling pass
     host: str = "127.0.0.1"
     port: int = 8080
 
@@ -45,6 +48,9 @@ class Settings:
             min_gold_for_calibration=int(os.environ.get("TESSERA_MIN_GOLD", "10")),
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
             openai_api_key=os.environ.get("OPENAI_API_KEY", ""),
+            llm_samples=int(os.environ.get("TESSERA_SAMPLES", "5")),
+            cache_path=os.environ.get("TESSERA_CACHE", "tessera_cache.db"),
+            workers=int(os.environ.get("TESSERA_WORKERS", "8")),
             host=os.environ.get("TESSERA_HOST", "127.0.0.1"),
             port=int(os.environ.get("TESSERA_PORT", "8080")),
         )

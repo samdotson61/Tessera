@@ -7,7 +7,7 @@ record_human_action:   apply a human accept/edit/reject and log the flywheel eve
 """
 from __future__ import annotations
 
-import time
+from concurrent.futures import ThreadPoolExecutor
 
 from .schemas import Prediction, Event, GateResult, HumanAction
 from .engine import confidence as conf_mod
@@ -17,28 +17,37 @@ from .engine.metrics import coverage_at_precision, ece
 from .engine.gating import apply_gate
 
 
-def run_labeling_pass(storage, dataset_id, taxonomy, labelers):
-    """Label every item in the dataset and store predictions. Returns the predictions."""
+def _predict_item(it, dataset_id, taxonomy, labelers):
+    outputs = [lab.label(it, taxonomy) for lab in labelers]
+    label, raw, agreement, votes, dist = conf_mod.ensemble(outputs)
+    violations = deterministic_checks(label, taxonomy)
+    rationale = outputs[0].rationale if outputs else ""
+    if violations:
+        # A failed rubric check forces the item to a human regardless of model confidence.
+        raw = 0.0
+        rationale = f"FAILED CHECK: {'; '.join(violations)}"
+    return Prediction(
+        item_id=it.id, dataset_id=dataset_id, taxonomy_id=taxonomy.id,
+        label=label, confidence_raw=raw, agreement=agreement, rationale=rationale,
+        votes=votes, distribution=dist,
+        source="+".join(l.model_id for l in labelers))
+
+
+def run_labeling_pass(storage, dataset_id, taxonomy, labelers, workers=1):
+    """Label every item in the dataset and store predictions. Returns the predictions.
+
+    workers > 1 labels items concurrently (LLM calls are network-bound); results
+    are stored in dataset order from the main thread either way.
+    """
     items = storage.get_items(dataset_id)
-    preds = []
-    for it in items:
-        t0 = time.time()
-        outputs = [lab.label(it, taxonomy) for lab in labelers]
-        label, raw, agreement, votes, dist = conf_mod.ensemble(outputs)
-        violations = deterministic_checks(label, taxonomy)
-        rationale = outputs[0].rationale if outputs else ""
-        if violations:
-            # A failed rubric check forces the item to a human regardless of model confidence.
-            raw = 0.0
-            rationale = f"FAILED CHECK: {'; '.join(violations)}"
-        p = Prediction(
-            item_id=it.id, dataset_id=dataset_id, taxonomy_id=taxonomy.id,
-            label=label, confidence_raw=raw, agreement=agreement, rationale=rationale,
-            votes=votes, distribution=dist,
-            source="+".join(l.model_id for l in labelers))
+    if workers > 1 and len(items) > 1:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            preds = list(pool.map(
+                lambda it: _predict_item(it, dataset_id, taxonomy, labelers), items))
+    else:
+        preds = [_predict_item(it, dataset_id, taxonomy, labelers) for it in items]
+    for p in preds:
         storage.upsert_prediction(p)
-        preds.append(p)
-        _ = (time.time() - t0)  # latency available for telemetry
     return preds
 
 
