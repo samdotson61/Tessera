@@ -26,14 +26,16 @@ This document turns the roadmap from the [product vision](01-product-vision-and-
 
 The single load-bearing idea: **the coverage@precision harness gates everything.** No prompt, calibration, router heuristic, or distilled model ships until the harness confirms it improved (or at least held) the north-star number on a held-out gold set. This is "eval-driven development," and it is the spine of the plan (§3).
 
-## 1a. Build status (June 2026)
+## 1a. Build status (July 2026)
 
-**Phase 0 (Wedge) and the core of Phase 1 (Trust) are built and shipped** — github.com/samdotson61/Tessera (private), 45 passing tests + CI. What actually shipped, and where it diverged from the plan below:
+**Phase 0 (Wedge) and most of Phase 1 (Trust) are built and shipped** — github.com/samdotson61/Tessera, 93 passing tests + CI (v0.2.0). What actually shipped, and where it diverged from the plan below:
 
-- **Built:** the full loop (ingest → ensemble labelers → calibration → coverage@precision gate → keyboard-first review UI → flywheel event log → export), the gold-set harness, the adjustable precision slider, and the per-dataset quality report.
+- **Built (Phase 0, June 2026):** the full loop (ingest → ensemble labelers → calibration → coverage@precision gate → keyboard-first review UI → flywheel event log → export), the gold-set harness, the adjustable precision slider, and the per-dataset quality report.
+- **Built (Phase 1, July 2026):** production-shaped LLM labeling (self-consistency sampling, response cache, retries, concurrency, optional two-family ensemble); the **LLM-as-judge verification pass** (different-family, veto-only, fail-open); the **pairwise/preference label type** end-to-end (second of the three beachhead types); **gold-set growth from human corrections** (source-tracked, seed gold immutable); **bootstrap 95% CIs on coverage@precision** computed on the out-of-fold CV values; **undo** in the review loop; the **quality-report panel with a reliability diagram** in the UI; and the **coverage@precision regression gate wired into CI** (engineering principle #1 made enforceable).
 - **Divergence — the wedge shipped on a pure-stdlib stack, not the production stack.** To make the MVP run anywhere with zero install, Phase 0 used SQLite (not Postgres), a stdlib HTTP server plus a custom keyboard-first web UI (not a Label Studio fork), and in-process orchestration (not Temporal). The production substitutions in [architecture](03-system-architecture.md) remain the target; the orchestration and model-layer interfaces are written so they slot in.
-- **Added during build:** cross-validated precision/ECE (the in-sample numbers were optimistic), plus an adversarial review pass that fixed a path-traversal bug, a gate/precision coherence bug, and non-idempotent event logging.
-- **Not yet built:** Phase 2 (closed active-learning retrain loop), Phase 3 (per-customer distillation), Phase 4 (cross-task Composer). The Phase 0 / Phase 1 sections below now read partly as a record of what was done; the remainder of Phase 1 through Phase 4 is the forward plan.
+- **Added during build:** cross-validated precision/ECE (the in-sample numbers were optimistic), plus an adversarial review pass that fixed a path-traversal bug, a gate/precision coherence bug, and non-idempotent event logging; later, a stale-final-label fix when a stricter re-gate routes a previously auto-applied item.
+- **Phase 0's exit number is still owed on real data.** The demo numbers come from the offline stub on bundled samples. The real-dataset tooling is in `scripts/` (AG News fetch + held-back-truth validation, verified end-to-end); producing the headline coverage@precision number requires a live model run (an API key) and, per §4.3, ideally a real partner dataset.
+- **Not yet built:** span/NER (the third beachhead label type), Phase 2 (closed active-learning retrain loop), Phase 3 (per-customer distillation), Phase 4 (cross-task Composer). The Phase 0 / Phase 1 sections below now read mostly as a record of what was done; span/NER and Phase 2 through Phase 4 are the forward plan.
 
 ---
 
