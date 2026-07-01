@@ -53,6 +53,8 @@ class KeywordStubLabeler(Labeler):
         self.model_id = model_id
 
     def label(self, item: Item, taxonomy: Taxonomy) -> LabelOutput:
+        if taxonomy.label_type == "pairwise" and item.is_pairwise():
+            return self._label_pairwise(item, taxonomy)
         kw = _keywords_for(taxonomy)
         toks = set(_tokens(item.text))
         scores = {}
@@ -65,6 +67,23 @@ class KeywordStubLabeler(Labeler):
         best = max(dist, key=dist.get) if dist else None
         hit_words = ", ".join(sorted(matched.get(best, []))) if best else ""
         rationale = f"matched: {hit_words}" if hit_words else "no strong keywords (ambiguous)"
+        return LabelOutput(model_id=self.model_id, distribution=dist, rationale=rationale)
+
+    def _label_pairwise(self, item: Item, taxonomy: Taxonomy) -> LabelOutput:
+        """Score each response by keyword overlap with the guidelines; the labels
+        "A"/"B" get their response's score, anything else (e.g. "tie") scores near
+        the loser. Same softmax + jitter as classification."""
+        kw = {w for w in _tokens(taxonomy.guidelines) if len(w) > 2 and w not in _STOP}
+        sides = {"A": len(set(_tokens(str(item.meta["response_a"]))) & kw),
+                 "B": len(set(_tokens(str(item.meta["response_b"]))) & kw)}
+        scores = {}
+        for lab in taxonomy.labels:
+            base = float(sides.get(lab, min(sides.values()) * 0.5))
+            scores[lab] = base + 0.1 + _jitter(self.model_id, item.id, lab, self.jitter)
+        dist = softmax(scores, self.temperature)
+        best = max(dist, key=dist.get) if dist else None
+        rationale = (f"guideline-keyword score A={sides['A']} B={sides['B']}"
+                     if best in ("A", "B") else "responses score alike (ambiguous)")
         return LabelOutput(model_id=self.model_id, distribution=dist, rationale=rationale)
 
 

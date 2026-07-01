@@ -1,0 +1,12 @@
+{
+  "id": "support-response-preference",
+  "name": "Support response preference",
+  "version": 1,
+  "label_type": "pairwise",
+  "labels": ["A", "B"],
+  "definitions": {
+    "A": "Response A better follows the guidelines",
+    "B": "Response B better follows the guidelines"
+  },
+  "guidelines": "Choose the response that better helps the customer: it should directly answer the question, give specific steps, and stay polite. A vague, dismissive, or off-topic response loses."
+}

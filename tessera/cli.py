@@ -51,7 +51,8 @@ def cmd_demo(args):
     settings.db_path = args.db
     storage = Storage(settings.db_path)
     taxonomy, gate = appmod.bootstrap_demo(storage, settings,
-                                            target_precision=args.target)
+                                            target_precision=args.target,
+                                            sample="pairwise" if args.pairwise else "intents")
     _print_summary(gate, taxonomy)
     report = build_quality_report(storage, "demo", taxonomy, gate)
     print("\n=== quality report ===")
@@ -134,6 +135,8 @@ def build_parser():
     d = sub.add_parser("demo", help="run the full loop on the bundled sample dataset")
     d.add_argument("--target", type=float, default=0.95, help="target precision")
     d.add_argument("--serve", action="store_true", help="open the review UI afterwards")
+    d.add_argument("--pairwise", action="store_true",
+                   help="use the bundled A/B response-preference sample instead of intents")
     d.set_defaults(func=cmd_demo)
 
     l = sub.add_parser("label", help="ingest a dataset + taxonomy and run the loop")

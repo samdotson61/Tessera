@@ -26,7 +26,7 @@ def _judge_prompt(item: Item, taxonomy: Taxonomy, label: str) -> str:
     for lab in taxonomy.labels:
         d = taxonomy.definitions.get(lab, "")
         lines.append(f"- {lab}: {d}" if d else f"- {lab}")
-    lines.append("\nText:\n" + item.text)
+    lines.append("\nText:\n" + item.render())
     lines.append(f"\nProposed label: {label}")
     lines.append('Does the proposed label comply with the guidelines? '
                  'Respond ONLY as JSON: {"verdict": "pass" or "fail", "reason": <short>}')

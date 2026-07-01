@@ -39,3 +39,8 @@ button:hover { border-color: var(--accent); }
 .hint { color: var(--muted); font-size: 12px; margin-top: 14px; }
 .hint b { color: var(--text); background: var(--panel2); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; }
 code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
+.pair-prompt { color: var(--muted); font-size: 15px; margin-bottom: 12px; }
+.pair-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pair { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 15px; }
+.pair-suggested { border-color: var(--accent); }
+.pair-head { color: var(--accent); font-weight: 700; margin-bottom: 6px; }

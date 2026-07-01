@@ -41,6 +41,7 @@ def _queue_payload(ctx):
         out.append({
             "item_id": p.item_id,
             "text": it.text if it else "",
+            "meta": it.meta if it else {},
             "predicted_label": p.label,
             "confidence": round(p.confidence(), 4),
             "agreement": round(p.agreement, 3),

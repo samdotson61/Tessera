@@ -43,8 +43,12 @@ def load_items(path, dataset_id) -> list:
             if not line:
                 continue
             d = json.loads(line)
+            meta = dict(d.get("meta", {}))
+            if "response_a" in d and "response_b" in d:   # pairwise/preference rows
+                meta["response_a"] = d["response_a"]
+                meta["response_b"] = d["response_b"]
             items.append(Item(id=str(d["id"]), dataset_id=dataset_id,
-                              text=d["text"], meta=d.get("meta", {})))
+                              text=d.get("text", d.get("prompt", "")), meta=meta))
     return items
 
 
@@ -77,12 +81,23 @@ def run_full(storage, dataset_id, taxonomy, settings, target_precision=None):
                               judge=make_judge(settings))
 
 
-def bootstrap_demo(storage, settings, dataset_id="demo", target_precision=None):
-    """Load the bundled sample dataset and run the full loop. Returns (taxonomy, GateResult)."""
+def bootstrap_demo(storage, settings, dataset_id="demo", target_precision=None,
+                   sample="intents"):
+    """Load a bundled sample dataset and run the full loop. Returns (taxonomy, GateResult).
+
+    sample: "intents" (classification) or "pairwise" (A/B response preference).
+    """
     sd = sample_dir()
-    taxonomy = load_taxonomy(os.path.join(sd, "taxonomy.json"))
-    items = load_items(os.path.join(sd, "intents.jsonl"), dataset_id)
-    gold = load_gold(os.path.join(sd, "gold.jsonl"), dataset_id)
-    ingest(storage, dataset_id, "Support intents (sample)", items, taxonomy, gold)
+    if sample == "pairwise":
+        taxonomy = load_taxonomy(os.path.join(sd, "pairwise_taxonomy.json"))
+        items = load_items(os.path.join(sd, "pairwise.jsonl"), dataset_id)
+        gold = load_gold(os.path.join(sd, "pairwise_gold.jsonl"), dataset_id)
+        name = "Response preference (sample)"
+    else:
+        taxonomy = load_taxonomy(os.path.join(sd, "taxonomy.json"))
+        items = load_items(os.path.join(sd, "intents.jsonl"), dataset_id)
+        gold = load_gold(os.path.join(sd, "gold.jsonl"), dataset_id)
+        name = "Support intents (sample)"
+    ingest(storage, dataset_id, name, items, taxonomy, gold)
     gate = run_full(storage, dataset_id, taxonomy, settings, target_precision)
     return taxonomy, gate

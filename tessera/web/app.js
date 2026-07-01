@@ -39,6 +39,39 @@ async function refreshQueue() {
   render();
 }
 
+function renderText(item) {
+  // Pairwise items carry the two candidate responses in meta; render them
+  // side by side under the prompt. Classification items stay plain text.
+  const box = document.getElementById("text");
+  const m = item.meta || {};
+  if (m.response_a === undefined || m.response_b === undefined) {
+    box.textContent = item.text;
+    return;
+  }
+  box.textContent = "";
+  if (item.text) {
+    const q = document.createElement("div");
+    q.className = "pair-prompt";
+    q.textContent = item.text;
+    box.appendChild(q);
+  }
+  const wrap = document.createElement("div");
+  wrap.className = "pair-wrap";
+  [["A", m.response_a], ["B", m.response_b]].forEach(([side, text]) => {
+    const panel = document.createElement("div");
+    panel.className = "pair" + (side === item.predicted_label ? " pair-suggested" : "");
+    const h = document.createElement("div");
+    h.className = "pair-head";
+    h.textContent = side;
+    const body = document.createElement("div");
+    body.textContent = String(text);
+    panel.appendChild(h);
+    panel.appendChild(body);
+    wrap.appendChild(panel);
+  });
+  box.appendChild(wrap);
+}
+
 function render() {
   const reviewer = document.getElementById("reviewer");
   const empty = document.getElementById("empty");
@@ -51,7 +84,7 @@ function render() {
   const conf = document.getElementById("conf");
   conf.textContent = `confidence ${fmtPct(item.confidence)} · agreement ${fmtPct(item.agreement)}`;
   conf.className = "conf " + (item.confidence >= 0.66 ? "hi" : item.confidence >= 0.4 ? "mid" : "lo");
-  document.getElementById("text").textContent = item.text;
+  renderText(item);
   document.getElementById("suggested").textContent = item.predicted_label;
   const rat = document.getElementById("rationale");
   rat.textContent = item.rationale; rat.hidden = true;

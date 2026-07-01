@@ -20,7 +20,7 @@ def now_iso() -> str:
 class LabelType(str, Enum):
     CLASSIFICATION = "classification"   # single-label (MVP focus)
     SPAN = "span"                       # NER / span highlighting (future)
-    PAIRWISE = "pairwise"               # A-vs-B preference (future)
+    PAIRWISE = "pairwise"               # A-vs-B preference
 
 
 class HumanAction(str, Enum):
@@ -44,6 +44,21 @@ class Item:
     meta: dict = field(default_factory=dict)
     final_label: Optional[str] = None
 
+    def is_pairwise(self) -> bool:
+        return "response_a" in self.meta and "response_b" in self.meta
+
+    def render(self) -> str:
+        """The text a labeler sees. Pairwise items carry the two candidate
+        responses in meta; text holds the prompt they answer."""
+        if self.is_pairwise():
+            parts = []
+            if self.text:
+                parts.append("Prompt:\n" + self.text)
+            parts.append("Response A:\n" + str(self.meta["response_a"]))
+            parts.append("Response B:\n" + str(self.meta["response_b"]))
+            return "\n\n".join(parts)
+        return self.text
+
 
 @dataclass
 class Taxonomy:
@@ -59,11 +74,12 @@ class Taxonomy:
         return list(self.labels)
 
     def to_prompt(self) -> str:
-        lines = [
-            "Task: assign exactly one label to the text below.",
-            f"Guidelines: {self.guidelines}".rstrip(),
-            "Labels:",
-        ]
+        if self.label_type == LabelType.PAIRWISE.value:
+            task = ("Task: compare the two candidate responses (A and B) to the prompt "
+                    "below and pick the better one according to the guidelines.")
+        else:
+            task = "Task: assign exactly one label to the text below."
+        lines = [task, f"Guidelines: {self.guidelines}".rstrip(), "Labels:"]
         for lab in self.labels:
             d = self.definitions.get(lab, "")
             lines.append(f"- {lab}: {d}" if d else f"- {lab}")

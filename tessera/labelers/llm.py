@@ -67,7 +67,7 @@ class LLMLabeler(Labeler):
         self._transport = transport or self._http_call  # injectable for offline tests
 
     def label(self, item: Item, taxonomy: Taxonomy) -> LabelOutput:
-        prompt = taxonomy.to_prompt() + "\n\nText:\n" + item.text
+        prompt = taxonomy.to_prompt() + "\n\nText:\n" + item.render()
         labels = taxonomy.labels
         samples = []          # (label, conf, rationale) per successful sample
         last_err = None
