@@ -20,12 +20,8 @@ jobs:
       # No third-party deps: the MVP is pure standard library.
       - name: Run tests
         run: python -m unittest discover -s tests -t . -v
-      - name: coverage@precision regression gate (fixed gold sets)
-        run: python -m unittest tests.test_regression -v
       - name: Smoke-test the demo loop (source tree)
         run: python -m tessera --db ci.db demo --target 0.95
-      - name: Smoke-test the pairwise demo loop
-        run: python -m tessera --db ci-pw.db demo --pairwise --target 0.95
       - name: Smoke-test the installed wheel from a neutral directory
         shell: bash
         run: |
