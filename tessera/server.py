@@ -13,6 +13,7 @@ from urllib.parse import urlparse, parse_qs
 
 from .schemas import to_dict
 from .engine.router import order_queue
+from .labelers.judge import make_judge
 from .pipeline import record_human_action, calibrate_and_gate
 from .quality import build_quality_report
 from .flywheel import event_stats
@@ -22,11 +23,12 @@ _CT = {".html": "text/html", ".js": "application/javascript", ".css": "text/css"
 
 
 class Context:
-    def __init__(self, storage, dataset_id, taxonomy, settings):
+    def __init__(self, storage, dataset_id, taxonomy, settings, judge=None):
         self.storage = storage
         self.dataset_id = dataset_id
         self.taxonomy = taxonomy
         self.settings = settings
+        self.judge = judge
         self.last_gate = None
 
 
@@ -113,7 +115,8 @@ def make_handler(ctx: Context):
                 target = float(body.get("target_precision", ctx.settings.target_precision))
                 ctx.settings.target_precision = target
                 ctx.last_gate = calibrate_and_gate(
-                    ctx.storage, ctx.dataset_id, ctx.taxonomy, target, ctx.settings)
+                    ctx.storage, ctx.dataset_id, ctx.taxonomy, target, ctx.settings,
+                    judge=ctx.judge)
                 return self._json({"ok": True, "gate": to_dict(ctx.last_gate)})
 
             return self._json({"error": "not found"}, 404)
@@ -138,7 +141,7 @@ def make_handler(ctx: Context):
 
 
 def serve(storage, dataset_id, taxonomy, settings, gate_result=None):
-    ctx = Context(storage, dataset_id, taxonomy, settings)
+    ctx = Context(storage, dataset_id, taxonomy, settings, judge=make_judge(settings))
     ctx.last_gate = gate_result
     httpd = ThreadingHTTPServer((settings.host, settings.port), make_handler(ctx))
     print(f"Tessera review UI  ->  http://{settings.host}:{settings.port}")

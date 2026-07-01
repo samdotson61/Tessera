@@ -33,6 +33,9 @@ def build_quality_report(storage, dataset_id, taxonomy, gate_result):
         caveats.append("No items met the precision target; everything was routed to humans. "
                        "Lower the target, improve the rubric, or add gold.")
     caveats.append("Rare classes and out-of-distribution items are never auto-applied without audit.")
+    if gate_result.n_judge_vetoed:
+        caveats.append(f"LLM judge vetoed {gate_result.n_judge_vetoed} auto-apply candidate(s) "
+                       "to the human queue; reported coverage is post-veto.")
     if gate_result.cross_validated:
         caveats.append("Achieved precision/ECE are cross-validated, out-of-sample estimates at the "
                        "deployed threshold. Validate with ongoing audit sampling (docs/04).")

@@ -62,11 +62,14 @@ def _gold_arrays(predictions_by_item, gold, use_calibrated):
     return confs, correct
 
 
-def calibrate_and_gate(storage, dataset_id, taxonomy, target_precision, settings, log_events=True):
+def calibrate_and_gate(storage, dataset_id, taxonomy, target_precision, settings,
+                       log_events=True, judge=None):
     """Fit calibration on gold, gate all predictions, auto-apply + log. Returns GateResult.
 
     log_events=False recomputes the gate without re-appending auto-apply events
     (used when re-gating an already-processed dataset, e.g. for a report).
+    judge (optional, docs/04 Layer 3) reviews each auto-apply candidate and can
+    veto it back to the human queue — it narrows the auto set, never widens it.
     """
     preds = storage.get_predictions(dataset_id)
     gold = storage.get_gold(dataset_id)
@@ -102,8 +105,28 @@ def calibrate_and_gate(storage, dataset_id, taxonomy, target_precision, settings
         cross_validated = False
 
     n_auto, n_queue = apply_gate(preds, threshold)
+
+    n_vetoed = 0
+    if judge is not None:
+        items = {it.id: it for it in storage.get_items(dataset_id)}
+        for p in preds:
+            if not p.auto_applied:
+                continue
+            it = items.get(p.item_id)
+            ok, reason = judge.review(it, taxonomy, p.label) if it else (True, "")
+            if not ok:
+                p.auto_applied = False
+                p.routed = True
+                p.rationale = f"JUDGE VETO: {reason} | {p.rationale}"
+                n_vetoed += 1
+        n_auto -= n_vetoed
+        n_queue += n_vetoed
     full_coverage = n_auto / len(preds) if preds else 0.0
 
+    # Items resolved by a human keep their final label; anything else that is now
+    # routed must not stay finalized from a previous, looser gate.
+    human_resolved = {e.item_id for e in storage.get_events(dataset_id)
+                      if e.routed_to_human and e.final_label is not None}
     if log_events:
         storage.delete_auto_events(dataset_id)  # idempotent: replace prior auto events
     for p in preds:
@@ -112,12 +135,14 @@ def calibrate_and_gate(storage, dataset_id, taxonomy, target_precision, settings
             storage.set_final_label(p.item_id, p.label)
             if log_events:
                 storage.append_event(_event_for(p, taxonomy, routed=False))
+        elif p.routed and p.item_id not in human_resolved:
+            storage.set_final_label(p.item_id, None)
 
     return GateResult(
         target_precision=target_precision, threshold=threshold, coverage=full_coverage,
         achieved_precision=achieved, n_auto=n_auto, n_queue=n_queue,
         n_gold=len(cal_confs), ece_before=ece_before, ece_after=ece_after,
-        cross_validated=cross_validated)
+        cross_validated=cross_validated, n_judge_vetoed=n_vetoed)
 
 
 def _event_for(p, taxonomy, routed, human_action=None, final_label="__model__"):

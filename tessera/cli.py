@@ -14,6 +14,7 @@ import json
 import sys
 
 from .config import Settings
+from .labelers.judge import make_judge
 from .storage import Storage
 from .schemas import to_dict
 from . import app as appmod
@@ -84,7 +85,8 @@ def cmd_report(args):
         print(f"no predictions for dataset '{args.dataset}'. Run `label` or `demo` first.")
         return 1
     gate = calibrate_and_gate(storage, args.dataset, taxonomy,
-                              settings.target_precision, settings, log_events=False)
+                              settings.target_precision, settings, log_events=False,
+                              judge=make_judge(settings))
     report = build_quality_report(storage, args.dataset, taxonomy, gate)
     print(json.dumps(to_dict(report), indent=2))
     storage.close()
@@ -117,7 +119,8 @@ def cmd_serve(args):
         print(f"no data for dataset '{args.dataset}'. Run `python -m tessera demo` first.")
         return 1
     gate = calibrate_and_gate(storage, args.dataset, taxonomy,
-                              settings.target_precision, settings, log_events=False)
+                              settings.target_precision, settings, log_events=False,
+                              judge=make_judge(settings))
     serve(storage, args.dataset, taxonomy, settings, gate_result=gate)
     storage.close()
     return 0

@@ -7,6 +7,7 @@ import os
 from .schemas import Dataset, Item, Taxonomy, GoldItem
 from .storage import Storage
 from .labelers import make_labelers
+from .labelers.judge import make_judge
 from .pipeline import run_labeling_pass, calibrate_and_gate
 
 
@@ -72,7 +73,8 @@ def run_full(storage, dataset_id, taxonomy, settings, target_precision=None):
     target = target_precision if target_precision is not None else settings.target_precision
     labelers = make_labelers(settings)
     run_labeling_pass(storage, dataset_id, taxonomy, labelers, workers=settings.workers)
-    return calibrate_and_gate(storage, dataset_id, taxonomy, target, settings)
+    return calibrate_and_gate(storage, dataset_id, taxonomy, target, settings,
+                              judge=make_judge(settings))
 
 
 def bootstrap_demo(storage, settings, dataset_id="demo", target_precision=None):

@@ -33,6 +33,8 @@ class Settings:
     llm_samples: int = 5              # self-consistency samples per item (LLM labelers)
     cache_path: str = "tessera_cache.db"   # LLM response cache; "none" disables
     workers: int = 8                  # concurrent items in the labeling pass
+    judge_provider: str = ""          # LLM-as-judge: "anthropic" | "openai" | "" (off).
+    judge_model: str = ""             # judge model override; pick a different family than the labeler
     host: str = "127.0.0.1"
     port: int = 8080
 
@@ -51,6 +53,8 @@ class Settings:
             llm_samples=int(os.environ.get("TESSERA_SAMPLES", "5")),
             cache_path=os.environ.get("TESSERA_CACHE", "tessera_cache.db"),
             workers=int(os.environ.get("TESSERA_WORKERS", "8")),
+            judge_provider=os.environ.get("TESSERA_JUDGE", ""),
+            judge_model=os.environ.get("TESSERA_JUDGE_MODEL", ""),
             host=os.environ.get("TESSERA_HOST", "127.0.0.1"),
             port=int(os.environ.get("TESSERA_PORT", "8080")),
         )
