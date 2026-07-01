@@ -15,6 +15,7 @@ venv/
 labels.jsonl
 pairs.jsonl
 demo.db
+data/
 
 # Env / secrets
 .env
