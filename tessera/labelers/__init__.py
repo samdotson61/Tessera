@@ -19,12 +19,14 @@ def make_labelers(settings):
     skipped; with none usable, falls back to the deterministic stub ensemble so
     the system always runs.
     """
-    cache = open_cache(settings.cache_path)
+    cache = None   # opened lazily so keyless/stub runs never create a cache file
     labelers = []
     for provider in [p.strip() for p in settings.provider.split(",") if p.strip()]:
         key = {"anthropic": settings.anthropic_api_key,
                "openai": settings.openai_api_key}.get(provider, "")
         if key:
+            if cache is None:
+                cache = open_cache(settings.cache_path)
             labelers.append(LLMLabeler(provider, key, n_samples=settings.llm_samples,
                                        cache=cache))
     return labelers or make_stub_ensemble()

@@ -3,6 +3,13 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.2.1 — 2026-07-14
+
+### Fixed
+- Keyless/stub runs no longer create an empty `tessera_cache.db` in the
+  working directory — the LLM response cache opens lazily, only when a
+  provider with an API key is configured.
+
 ## 0.2.0 — 2026-07-01
 
 Phase 1 (Trust) build-out: the LLM path made production-shaped, a second

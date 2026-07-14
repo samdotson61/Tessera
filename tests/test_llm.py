@@ -120,6 +120,14 @@ class TestFactory(unittest.TestCase):
         self.assertEqual(len(labs), 2)               # the stub ensemble
         self.assertTrue(all("stub" in l.model_id for l in labs))
 
+    def test_keyless_run_creates_no_cache_file(self):
+        d = tempfile.mkdtemp()
+        path = os.path.join(d, "cache.db")
+        make_labelers(Settings(provider="stub", cache_path=path))
+        make_labelers(Settings(provider="anthropic", anthropic_api_key="",
+                               cache_path=path))
+        self.assertFalse(os.path.exists(path))       # cache opens lazily, key-gated
+
     def test_default_model_is_current(self):
         self.assertEqual(LLMLabeler("anthropic", "k").model, "claude-haiku-4-5")
 
