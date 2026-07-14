@@ -52,6 +52,16 @@ class TestSelfConsistency(unittest.TestCase):
         out = LLMLabeler("openai", "k", n_samples=3, transport=t).label(ITEM, TAX)
         self.assertAlmostEqual(sum(out.distribution.values()), 1.0, places=6)
 
+    def test_near_json_reply_is_salvaged(self):
+        # A local 4B dropped the opening quote on rationale (seen live) — the
+        # label and confidence fields are intact and must be recovered.
+        broken = ('{"label": "c", "confidence": 0.95, "rationale": The text focuses '
+                  'on research."}')
+        t = FakeTransport([broken])
+        out = LLMLabeler("anthropic", "k", n_samples=1, transport=t).label(ITEM, TAX)
+        self.assertEqual(out.top()[0], "c")
+        self.assertAlmostEqual(out.distribution["c"], 0.95, places=2)
+
     def test_off_taxonomy_label_coerced(self):
         t = FakeTransport([_resp("zzz")])
         out = LLMLabeler("anthropic", "k", n_samples=1, transport=t).label(ITEM, TAX)
@@ -130,6 +140,24 @@ class TestFactory(unittest.TestCase):
 
     def test_default_model_is_current(self):
         self.assertEqual(LLMLabeler("anthropic", "k").model, "claude-haiku-4-5")
+
+    def test_local_url_needs_no_key(self):
+        s = Settings(provider="anthropic", anthropic_api_key="", cache_path="none",
+                     anthropic_url="http://127.0.0.1:8080/v1/messages",
+                     model_id="qwen3.5-4b")
+        labs = make_labelers(s)
+        self.assertEqual(len(labs), 1)
+        self.assertEqual(labs[0].base_url, "http://127.0.0.1:8080/v1/messages")
+        self.assertEqual(labs[0].model, "qwen3.5-4b")
+
+    def test_default_base_url_is_anthropic_api(self):
+        self.assertEqual(LLMLabeler("anthropic", "k").base_url,
+                         "https://api.anthropic.com/v1/messages")
+
+    def test_custom_url_without_key_still_stub_for_openai(self):
+        s = Settings(provider="openai", openai_api_key="", cache_path="none",
+                     anthropic_url="http://127.0.0.1:8080/v1/messages")
+        self.assertTrue(all("stub" in l.model_id for l in make_labelers(s)))
 
 
 class TestConcurrentPass(unittest.TestCase):

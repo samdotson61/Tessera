@@ -21,12 +21,17 @@ def make_labelers(settings):
     """
     cache = None   # opened lazily so keyless/stub runs never create a cache file
     labelers = []
+    model = settings.model_id if settings.model_id != "stub-kw-v1" else None
     for provider in [p.strip() for p in settings.provider.split(",") if p.strip()]:
         key = {"anthropic": settings.anthropic_api_key,
                "openai": settings.openai_api_key}.get(provider, "")
-        if key:
+        # anthropic pointed at an alternate URL (TESSERA_ANTHROPIC_URL, e.g. a
+        # local winc.cpp server) needs no key — fully-local labeling is free.
+        if key or (provider == "anthropic" and settings.anthropic_url):
             if cache is None:
                 cache = open_cache(settings.cache_path)
-            labelers.append(LLMLabeler(provider, key, n_samples=settings.llm_samples,
-                                       cache=cache))
+            labelers.append(LLMLabeler(
+                provider, key, model=model, n_samples=settings.llm_samples,
+                cache=cache,
+                base_url=settings.anthropic_url if provider == "anthropic" else ""))
     return labelers or make_stub_ensemble()

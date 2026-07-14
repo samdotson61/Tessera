@@ -138,6 +138,31 @@ offline stub on the bundled sample; run this to produce a coverage@precision
 number on real data with a real model — the honest headline is *validated*
 precision on the unseen split, not the gold-set estimate.
 
+### …or for free, fully local
+
+`TESSERA_ANTHROPIC_URL` points the labeler at any server that speaks the
+Anthropic `/v1/messages` shape — e.g. [winc.cpp](https://github.com/samdotson61/winc.cpp)
+or a llama.cpp server — no API key, no cost:
+
+```bash
+export TESSERA_PROVIDER=anthropic
+export TESSERA_ANTHROPIC_URL=http://127.0.0.1:8080/v1/messages
+export TESSERA_MODEL=qwen3.5-4b TESSERA_SAMPLES=1   # greedy server -> 1 sample
+python -m tessera --db agnews.db label --data data/agnews/items.jsonl \
+    --taxonomy data/agnews/taxonomy.json --gold data/agnews/gold.jsonl --dataset agnews
+```
+
+**Measured (2026-07-14, Qwen3.5-4B running locally, $0):** on 400 AG News
+items with a 120-item gold sample, the gate auto-labeled **27.5%** at a
+cross-validated 97.0% precision against the 95% target — and the
+held-back-truth check measured **93.6% true precision** on the auto-applied
+set (92.2% on items the calibrator never saw). The 95% SLA did *not* quite
+hold out-of-sample, and the report said so up front: the bootstrap coverage
+CI was 0–44%. That is the trust layer working as designed — a 4B model with
+single-sample verbalized confidence is not enough for a tight 95% SLA. The
+levers, in order: more gold, self-consistency sampling (a non-greedy server),
+a cross-family judge, or a frontier labeler.
+
 ## Layout
 
 ```

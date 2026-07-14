@@ -3,6 +3,18 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.3.0 — 2026-07-14
+
+### Added
+- **Free, fully-local labeling**: `TESSERA_ANTHROPIC_URL` points the
+  anthropic-shaped request at any `/v1/messages` endpoint — e.g. a local
+  winc.cpp / llama.cpp server — with no API key required. `TESSERA_MODEL`
+  now flows through to the LLM labelers (e.g. `qwen3.5-4b`).
+- **Near-JSON salvage parser**: small local models occasionally drop a quote
+  or brace; when the `label`/`confidence` fields are intact they are now
+  recovered by regex instead of failing the sample (seen live: a 4B omitted
+  the opening quote of the rationale string).
+
 ## 0.2.1 — 2026-07-14
 
 ### Fixed

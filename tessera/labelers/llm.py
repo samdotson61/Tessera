@@ -14,6 +14,7 @@ tests inject a fake transport.
 from __future__ import annotations
 
 import json
+import re
 import time
 import urllib.error
 import urllib.request
@@ -42,6 +43,18 @@ def _extract_json(text: str) -> str:
     return "{}"
 
 
+def _salvage(text: str):
+    """Regex fallback for near-JSON replies (small local models drop a quote or
+    brace now and then). Recovers label + confidence when those fields are
+    intact; raises if even the label is missing."""
+    m = re.search(r'"label"\s*:\s*"([^"]+)"', text)
+    if not m:
+        raise ValueError("no parsable 'label' in LLM response")
+    c = re.search(r'"confidence"\s*:\s*([0-9]*\.?[0-9]+)', text)
+    r = re.search(r'"rationale"\s*:\s*"?\s*(.+?)"?\s*}?\s*$', text, re.S)
+    return m.group(1), float(c.group(1)) if c else 0.7, (r.group(1).strip() if r else "")
+
+
 def _spread(label: str, conf: float, labels: list) -> dict:
     """Distribution putting conf on label, the remainder uniform over the rest."""
     if len(labels) <= 1:
@@ -53,12 +66,18 @@ def _spread(label: str, conf: float, labels: list) -> dict:
 
 
 class LLMLabeler(Labeler):
+    ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+
     def __init__(self, provider: str = "anthropic", api_key: str = "",
                  model: str | None = None, model_id: str | None = None,
                  n_samples: int = 5, cache: ResponseCache | None = None,
-                 max_retries: int = 3, transport=None):
+                 max_retries: int = 3, transport=None, base_url: str = ""):
         self.provider = provider
         self.api_key = api_key
+        # base_url points the anthropic-shaped request at any /v1/messages
+        # endpoint — e.g. a local winc.cpp / llama.cpp server — for free,
+        # fully-local labeling. The API key is optional there.
+        self.base_url = base_url or self.ANTHROPIC_URL
         self.model = model or ("claude-haiku-4-5" if provider == "anthropic" else "gpt-4o-mini")
         self.model_id = model_id or f"{provider}:{self.model}"
         self.n_samples = max(1, n_samples)
@@ -108,7 +127,10 @@ class LLMLabeler(Labeler):
             text = self._call_with_retries(prompt)
             if self.cache is not None:
                 self.cache.put(key, text)
-        obj = json.loads(_extract_json(text))
+        try:
+            obj = json.loads(_extract_json(text))
+        except json.JSONDecodeError:
+            return _salvage(text)
         label = obj.get("label")
         if not label:
             raise ValueError("LLM response missing 'label'")
@@ -134,12 +156,13 @@ class LLMLabeler(Labeler):
         # self-consistency needs, and newer Anthropic models reject the parameter.
         if self.provider == "anthropic":
             req = urllib.request.Request(
-                "https://api.anthropic.com/v1/messages",
+                self.base_url,
                 data=json.dumps({
                     "model": self.model, "max_tokens": 256,
                     "messages": [{"role": "user", "content": prompt}],
                 }).encode(),
-                headers={"x-api-key": self.api_key, "anthropic-version": "2023-06-01",
+                headers={"x-api-key": self.api_key or "local",
+                         "anthropic-version": "2023-06-01",
                          "content-type": "application/json"})
             with urllib.request.urlopen(req, timeout=60) as r:
                 body = json.loads(r.read())

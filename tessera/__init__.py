@@ -9,4 +9,4 @@ tests pass anywhere with no install step. The production stack (FastAPI, Postgre
 a vector DB, Temporal, model distillation) is described in docs/03 and docs/08.
 """
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
