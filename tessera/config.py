@@ -32,6 +32,8 @@ class Settings:
     openai_api_key: str = ""
     anthropic_url: str = ""           # alternate /v1/messages endpoint (e.g. a local
                                       # winc.cpp/llama.cpp server); key optional then
+    openai_url: str = ""              # alternate /v1/chat/completions endpoint (e.g.
+                                      # ollama/vLLM/llama-server); key optional then
     llm_samples: int = 5              # self-consistency samples per item (LLM labelers)
     cache_path: str = "tessera_cache.db"   # LLM response cache; "none" disables
     workers: int = 8                  # concurrent items in the labeling pass
@@ -54,6 +56,7 @@ class Settings:
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
             openai_api_key=os.environ.get("OPENAI_API_KEY", ""),
             anthropic_url=os.environ.get("TESSERA_ANTHROPIC_URL", ""),
+            openai_url=os.environ.get("TESSERA_OPENAI_URL", ""),
             llm_samples=int(os.environ.get("TESSERA_SAMPLES", "5")),
             cache_path=os.environ.get("TESSERA_CACHE", "tessera_cache.db"),
             workers=int(os.environ.get("TESSERA_WORKERS", "8")),

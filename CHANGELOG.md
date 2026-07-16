@@ -3,6 +3,24 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.4.0 — 2026-07-14
+
+### Added
+- **`TESSERA_OPENAI_URL`** — the openai-shaped twin of `TESSERA_ANTHROPIC_URL`:
+  point the labeler at any `/v1/chat/completions` endpoint (ollama, vLLM,
+  llama-server), key optional.
+- **`scripts/simulate_review.py`** — oracle-reviewer simulation (held-back
+  truth stands in for the human) measuring the gold-growth coverage climb
+  round over round.
+- LLM call timeouts raised to 180s (local servers decode slower than APIs and
+  queue concurrent requests).
+
+### Findings (measured, local Qwen3.5-4B, $0 — see README)
+- Self-consistency raised confidence resolution 5 → 48 distinct values and
+  coverage 27.5% → 46.8% at similar true precision.
+- Review-queue gold growth alone cannot correct auto-region overconfidence —
+  the docs/04 audit sample is required (next build item).
+
 ## 0.3.0 — 2026-07-14
 
 ### Added

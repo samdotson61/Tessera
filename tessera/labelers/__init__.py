@@ -25,13 +25,15 @@ def make_labelers(settings):
     for provider in [p.strip() for p in settings.provider.split(",") if p.strip()]:
         key = {"anthropic": settings.anthropic_api_key,
                "openai": settings.openai_api_key}.get(provider, "")
-        # anthropic pointed at an alternate URL (TESSERA_ANTHROPIC_URL, e.g. a
-        # local winc.cpp server) needs no key — fully-local labeling is free.
-        if key or (provider == "anthropic" and settings.anthropic_url):
+        # A provider pointed at an alternate URL (TESSERA_ANTHROPIC_URL /
+        # TESSERA_OPENAI_URL, e.g. winc.cpp or ollama) needs no key —
+        # fully-local labeling is free.
+        url = {"anthropic": settings.anthropic_url,
+               "openai": settings.openai_url}.get(provider, "")
+        if key or url:
             if cache is None:
                 cache = open_cache(settings.cache_path)
             labelers.append(LLMLabeler(
                 provider, key, model=model, n_samples=settings.llm_samples,
-                cache=cache,
-                base_url=settings.anthropic_url if provider == "anthropic" else ""))
+                cache=cache, base_url=url))
     return labelers or make_stub_ensemble()

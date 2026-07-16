@@ -154,10 +154,23 @@ class TestFactory(unittest.TestCase):
         self.assertEqual(LLMLabeler("anthropic", "k").base_url,
                          "https://api.anthropic.com/v1/messages")
 
-    def test_custom_url_without_key_still_stub_for_openai(self):
+    def test_anthropic_url_does_not_enable_openai(self):
         s = Settings(provider="openai", openai_api_key="", cache_path="none",
                      anthropic_url="http://127.0.0.1:8080/v1/messages")
         self.assertTrue(all("stub" in l.model_id for l in make_labelers(s)))
+
+    def test_openai_local_url_needs_no_key(self):
+        s = Settings(provider="openai", openai_api_key="", cache_path="none",
+                     openai_url="http://127.0.0.1:11434/v1/chat/completions",
+                     model_id="tessera-qwen")
+        labs = make_labelers(s)
+        self.assertEqual(len(labs), 1)
+        self.assertEqual(labs[0].base_url, "http://127.0.0.1:11434/v1/chat/completions")
+        self.assertEqual(labs[0].model, "tessera-qwen")
+
+    def test_openai_default_base_url(self):
+        self.assertEqual(LLMLabeler("openai", "k").base_url,
+                         "https://api.openai.com/v1/chat/completions")
 
 
 class TestConcurrentPass(unittest.TestCase):

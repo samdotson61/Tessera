@@ -67,6 +67,7 @@ def _spread(label: str, conf: float, labels: list) -> dict:
 
 class LLMLabeler(Labeler):
     ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+    OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 
     def __init__(self, provider: str = "anthropic", api_key: str = "",
                  model: str | None = None, model_id: str | None = None,
@@ -74,10 +75,12 @@ class LLMLabeler(Labeler):
                  max_retries: int = 3, transport=None, base_url: str = ""):
         self.provider = provider
         self.api_key = api_key
-        # base_url points the anthropic-shaped request at any /v1/messages
-        # endpoint — e.g. a local winc.cpp / llama.cpp server — for free,
-        # fully-local labeling. The API key is optional there.
-        self.base_url = base_url or self.ANTHROPIC_URL
+        # base_url points the provider-shaped request at any compatible
+        # endpoint — winc.cpp/llama.cpp for the anthropic shape, ollama/vLLM
+        # for the openai shape — for free, fully-local labeling. The API key
+        # is optional there.
+        self.base_url = base_url or (
+            self.ANTHROPIC_URL if provider == "anthropic" else self.OPENAI_URL)
         self.model = model or ("claude-haiku-4-5" if provider == "anthropic" else "gpt-4o-mini")
         self.model_id = model_id or f"{provider}:{self.model}"
         self.n_samples = max(1, n_samples)
@@ -164,17 +167,19 @@ class LLMLabeler(Labeler):
                 headers={"x-api-key": self.api_key or "local",
                          "anthropic-version": "2023-06-01",
                          "content-type": "application/json"})
-            with urllib.request.urlopen(req, timeout=60) as r:
+            # generous timeout: local servers decode far slower than APIs and
+            # queue concurrent requests
+            with urllib.request.urlopen(req, timeout=180) as r:
                 body = json.loads(r.read())
             return body["content"][0]["text"]
         req = urllib.request.Request(
-            "https://api.openai.com/v1/chat/completions",
+            self.base_url,
             data=json.dumps({
-                "model": self.model,
+                "model": self.model, "max_tokens": 256,
                 "messages": [{"role": "user", "content": prompt}],
             }).encode(),
-            headers={"Authorization": f"Bearer {self.api_key}",
+            headers={"Authorization": f"Bearer {self.api_key or 'local'}",
                      "content-type": "application/json"})
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with urllib.request.urlopen(req, timeout=180) as r:
             body = json.loads(r.read())
         return body["choices"][0]["message"]["content"]

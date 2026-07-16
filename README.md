@@ -152,16 +152,37 @@ python -m tessera --db agnews.db label --data data/agnews/items.jsonl \
     --taxonomy data/agnews/taxonomy.json --gold data/agnews/gold.jsonl --dataset agnews
 ```
 
-**Measured (2026-07-14, Qwen3.5-4B running locally, $0):** on 400 AG News
-items with a 120-item gold sample, the gate auto-labeled **27.5%** at a
-cross-validated 97.0% precision against the 95% target — and the
-held-back-truth check measured **93.6% true precision** on the auto-applied
-set (92.2% on items the calibrator never saw). The 95% SLA did *not* quite
-hold out-of-sample, and the report said so up front: the bootstrap coverage
-CI was 0–44%. That is the trust layer working as designed — a 4B model with
-single-sample verbalized confidence is not enough for a tight 95% SLA. The
-levers, in order: more gold, self-consistency sampling (a non-greedy server),
-a cross-family judge, or a frontier labeler.
+**Measured (2026-07-14, Qwen3.5-4B running locally via winc.cpp, $0):**
+400 AG News items, 120-item stratified gold sample, 95% target — one run on a
+greedy serve (single sample) and one on a sampling serve (5-vote
+self-consistency):
+
+| run | distinct conf values | coverage | CV estimate | true (all auto) | true (unseen) |
+|---|---|---|---|---|---|
+| greedy, 1 sample | 5 | 27.5% | 97.0% | 93.6% | 92.2% |
+| sampled, 5 votes | 48 | **46.8%** | 98.2% | 92.5% | 90.1% |
+
+Three honest lessons, straight from the trust layer:
+
+1. **Self-consistency buys resolution, and resolution buys coverage.** Greedy
+   verbalized confidence collapsed to 5 distinct values — the gate physically
+   had no intermediate threshold to choose, and growing the gold set moved
+   nothing. Five sampled votes produced 48 distinct values and +70% coverage.
+2. **A 4B's confidence signal saturates below a 95% SLA.** Both runs measured
+   ~90–94% true precision on the auto-applied set — the 0–85% bootstrap
+   coverage CI at 120 gold items said up front that the CV estimate couldn't
+   be trusted to the point.
+3. **Review-queue gold can't police the auto region.** An oracle-reviewer
+   simulation (`scripts/simulate_review.py`) worked the entire routed queue —
+   and coverage never moved, because the errors that matter are *above* the
+   threshold, where the reviewer never looks. This is why docs/04's ~2% audit
+   sample is load-bearing, not optional: it is the only channel that feeds
+   auto-region errors back into calibration.
+
+Footprint note: winc's fitter sizes the engine itself (49K context, ~3.6 GB
+RSS for the 4B on Apple Silicon — configs below that are floored); labeling
+correctness and throughput were constant across context settings, so there is
+nothing to tune on the Tessera side.
 
 ## Layout
 
