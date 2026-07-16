@@ -179,10 +179,21 @@ Three honest lessons, straight from the trust layer:
    sample is load-bearing, not optional: it is the only channel that feeds
    auto-region errors back into calibration.
 
-Footprint note: winc's fitter sizes the engine itself (49K context, ~3.6 GB
-RSS for the 4B on Apple Silicon — configs below that are floored); labeling
-correctness and throughput were constant across context settings, so there is
-nothing to tune on the Tessera side.
+Footprint note: winc's launch ladder sizes the engine itself (it rounds
+explicit context configs up — 49K / ~3.6 GB RSS for the 4B on Apple Silicon).
+For the minimum footprint, run llama-server directly and point
+`TESSERA_OPENAI_URL` at it — measured floor for this workload:
+
+```bash
+llama-server -m Qwen3.5-4B-Q4_K_M.gguf --port 8091 -c 2048 -np 2 \
+    --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0   # ~2.9 GB RSS, 20/20 parses
+export TESSERA_PROVIDER=openai TESSERA_OPENAI_URL=http://127.0.0.1:8091/v1/chat/completions
+```
+
+Labeling prompts are ~500-700 tokens end-to-end, so ~1K of context per slot
+is the practical per-request floor; below that the 4B's ~2.5 GB of weights are
+the irreducible cost. (At -c 4096 -np 4 we measured 2/20 parse drops from
+slot contention — prefer fewer, roomier slots when squeezing memory.)
 
 ## Layout
 
