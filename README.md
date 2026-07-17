@@ -191,6 +191,17 @@ Three honest lessons, straight from the trust layer:
    verdict stream is also the production SLA check (`audit_precision` in the
    quality report).
 
+**End-to-end dogfood (2026-07-17, $0):** a real annotation job — 300 raw SMS
+downloaded, a spam/ham rubric written, a 60-item gold sample hand-labeled,
+machine-labeled by a locally-served Qwen3.5-4B, 39 items human-reviewed
+(keyboard-first), training set exported. The gate auto-labeled 90.3% at
+96.7% CV precision; audited against the dataset's own held-back reference
+labels, the finished training set agreed 93.3% overall — the human decisions
+100%, the auto set 92.6% (a fifth of the disagreements are arguably
+reference noise). Working lesson that shipped as guidance: size the audit
+sample by *count*, not rate — 10 audited items cannot detect a ~7% error
+rate (~46% chance of seeing zero errors).
+
 Footprint note: labeling prompts are ~500-700 tokens end-to-end, so a tiny
 context window is all a labeling endpoint needs. With winc.cpp ≥ v1.26.0, set
 `context = "2048"` in winc.toml and the pin is honored exactly — measured
