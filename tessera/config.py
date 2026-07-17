@@ -40,6 +40,8 @@ class Settings:
     logprobs: bool = False            # classification via the label token's logprobs:
                                       # 1 call/item, continuous confidence (openai-shaped
                                       # local servers only — llama-server/vLLM)
+    fewshot_static: bool = False      # one fixed example block for every item (shared
+                                      # prompt prefix -> the server caches the prefill)
     cache_path: str = "tessera_cache.db"   # LLM response cache; "none" disables
     workers: int = 8                  # concurrent items in the labeling pass
     judge_provider: str = ""          # LLM-as-judge: "anthropic" | "openai" | "" (off).
@@ -68,6 +70,7 @@ class Settings:
             llm_samples=int(os.environ.get("TESSERA_SAMPLES", "5")),
             fewshot=int(os.environ.get("TESSERA_FEWSHOT", "0")),
             logprobs=os.environ.get("TESSERA_LOGPROBS", "0") in ("1", "true", "yes"),
+            fewshot_static=os.environ.get("TESSERA_FEWSHOT_STATIC", "0") in ("1", "true", "yes"),
             cache_path=os.environ.get("TESSERA_CACHE", "tessera_cache.db"),
             workers=int(os.environ.get("TESSERA_WORKERS", "8")),
             judge_provider=os.environ.get("TESSERA_JUDGE", ""),

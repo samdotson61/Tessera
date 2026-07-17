@@ -27,15 +27,24 @@ def make_labelers(settings, examples=None):
                "openai": settings.openai_api_key}.get(provider, "")
         # A provider pointed at an alternate URL (TESSERA_ANTHROPIC_URL /
         # TESSERA_OPENAI_URL, e.g. winc.cpp or ollama) needs no key —
-        # fully-local labeling is free.
+        # fully-local labeling is free. TESSERA_OPENAI_URL takes a comma list
+        # (paired with a TESSERA_MODEL comma list) for a multi-endpoint local
+        # ensemble: two model families voting is the strongest routing signal.
         url = {"anthropic": settings.anthropic_url,
                "openai": settings.openai_url}.get(provider, "")
-        if key or url:
+        urls = [u.strip() for u in url.split(",") if u.strip()] or [""]
+        models = ([m.strip() for m in (model or "").split(",") if m.strip()]
+                  if provider == "openai" else [model])
+        for j, u in enumerate(urls):
+            if not (key or u):
+                continue
             if cache is None:
                 cache = open_cache(settings.cache_path)
+            m = models[j] if j < len(models) else (models[-1] if models else None)
             labelers.append(LLMLabeler(
-                provider, key, model=model, n_samples=settings.llm_samples,
-                cache=cache, base_url=url,
+                provider, key, model=m, n_samples=settings.llm_samples,
+                cache=cache, base_url=u,
                 examples=examples, fewshot=getattr(settings, "fewshot", 0),
-                logprobs=getattr(settings, "logprobs", False)))
+                logprobs=getattr(settings, "logprobs", False),
+                fewshot_static=getattr(settings, "fewshot_static", False)))
     return labelers or make_stub_ensemble()

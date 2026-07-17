@@ -263,3 +263,41 @@ class TestLogprobHead(unittest.TestCase):
         lab = LLMLabeler("anthropic", "k", n_samples=1, transport=t, logprobs=True)
         self.assertFalse(lab.logprobs)
         self.assertEqual(lab.label(ITEM, TAX).top()[0], "a")
+
+
+class TestStaticFewshotAndEnsemble(unittest.TestCase):
+    def test_static_block_identical_across_items_and_class_spread(self):
+        seen = []
+        def transport(prompt):
+            seen.append(prompt)
+            return _resp("a")
+        examples = [("t1", "a"), ("t2", "a"), ("t3", "b"), ("t4", "c")]
+        lab = LLMLabeler("openai", "k", n_samples=1, transport=transport,
+                         examples=examples, fewshot=3, fewshot_static=True)
+        lab.label(Item(id="x", dataset_id="d", text="one text"), TAX)
+        lab.label(Item(id="y", dataset_id="d", text="other text"), TAX)
+        b1 = seen[0].split("Examples of correct labels:")[1].split("Text:\n")[0]
+        b2 = seen[1].split("Examples of correct labels:")[1].split("Text:\n")[0]
+        self.assertEqual(b1, b2)                       # shared prefix
+        for t in ("t1", "t3", "t4"):                   # one per class first
+            self.assertIn(t, b1)
+        self.assertNotIn("t2", b1)
+
+    def test_static_self_item_falls_back_to_nearest(self):
+        seen = []
+        def transport(prompt):
+            seen.append(prompt)
+            return _resp("a")
+        examples = [("alpha alpha", "a"), ("beta beta", "b"), ("gamma gamma", "c")]
+        lab = LLMLabeler("openai", "k", n_samples=1, transport=transport,
+                         examples=examples, fewshot=3, fewshot_static=True)
+        lab.label(ITEM, TAX)                           # ITEM text == "alpha alpha"
+        self.assertNotIn("Text: alpha alpha\nAnswer", seen[0])   # no self-leak
+
+    def test_multi_endpoint_openai_ensemble(self):
+        s = Settings(provider="openai", openai_api_key="", cache_path="none",
+                     openai_url="http://h1:1/v1/chat/completions, http://h2:2/v1/chat/completions",
+                     model_id="qwen,gemma")
+        labs = make_labelers(s)
+        self.assertEqual([l.base_url.split("//")[1][:2] for l in labs], ["h1", "h2"])
+        self.assertEqual([l.model for l in labs], ["qwen", "gemma"])

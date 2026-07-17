@@ -73,7 +73,8 @@ class LLMLabeler(Labeler):
                  model: str | None = None, model_id: str | None = None,
                  n_samples: int = 5, cache: ResponseCache | None = None,
                  max_retries: int = 3, transport=None, base_url: str = "",
-                 examples=None, fewshot: int = 0, logprobs: bool = False):
+                 examples=None, fewshot: int = 0, logprobs: bool = False,
+                 fewshot_static: bool = False):
         self.provider = provider
         self.api_key = api_key
         # base_url points the provider-shaped request at any compatible
@@ -96,13 +97,35 @@ class LLMLabeler(Labeler):
         # continuous confidence at 1/5th the calls of self-consistency voting.
         self.logprobs = bool(logprobs) and provider == "openai"
         self._examples = []
+        self._static = []
         if examples and self.fewshot:
             from ..engine.embed import embed
             self._examples = [(embed(t), t, lab) for t, lab in examples]
+            if fewshot_static:
+                # One fixed block, spread across classes round-robin: every
+                # prompt shares its prefix, so the server's prefix cache pays
+                # the example prefill once instead of per item.
+                by_class = {}
+                for t, lab in examples:
+                    by_class.setdefault(lab, []).append(t)
+                order = sorted(by_class)
+                i = 0
+                while len(self._static) < self.fewshot and any(by_class.values()):
+                    lab = order[i % len(order)]
+                    if by_class[lab]:
+                        self._static.append((by_class[lab].pop(0), lab))
+                    i += 1
 
     def _fewshot_block(self, item_text: str) -> str:
         if not self._examples:
             return ""
+        if self._static and all(t != item_text for t, _ in self._static):
+            # the shared block (an item appearing in it falls through to the
+            # nearest-mode block below, which excludes self — no gold leak)
+            answer = (lambda lab: lab if self.logprobs else f'{{"label": "{lab}"}}')
+            lines = ["", "Examples of correct labels:"]
+            lines += [f'Text: {t}\nAnswer: {answer(lab)}' for t, lab in self._static]
+            return "\n".join(lines) + "\n"
         from ..engine.embed import embed, cosine
         v = embed(item_text)
         ranked = sorted(self._examples, key=lambda e: cosine(v, e[0]), reverse=True)
@@ -295,6 +318,11 @@ class LLMLabeler(Labeler):
             payload["max_tokens"] = 5
             payload["logprobs"] = True
             payload["top_logprobs"] = 20
+            # llama-server honors per-request KV prompt caching on the OpenAI
+            # endpoint only when asked: with the shared taxonomy prefix this
+            # cuts prefill to roughly the item's own tokens. Servers that
+            # don't know the field ignore it.
+            payload["cache_prompt"] = True
         req = urllib.request.Request(
             self.base_url, data=json.dumps(payload).encode(),
             headers={"Authorization": f"Bearer {self.api_key or 'local'}",

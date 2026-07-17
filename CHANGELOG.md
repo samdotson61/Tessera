@@ -3,6 +3,48 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.9.0 — 2026-07-17
+
+The limits pass: low-end verdicts, honest gold at scale, the Tier-0
+specialist, and three retirements the harness ordered.
+
+### Added
+- **Tier-0 specialist + cascade** (`tessera/engine/specialist.py`,
+  `scripts/cascade.py`): a pure-stdlib logistic head over the hashed-BoW
+  features, trained on human-trusted labels only, wrapped as an ordinary
+  labeler behind the same calibration/gate; the cascade script measures
+  specialist → LLM → human end to end with a train/calibrate gold split
+  (leak measured first: same-gold calibration passed 100% of items).
+- **Static few-shot** (`TESSERA_FEWSHOT_STATIC=1`): one fixed example block
+  (class round-robin) shared by every prompt; self-items fall back to
+  nearest-mode. Built as a prefix-cache speed lever.
+- **Multi-endpoint local ensemble**: `TESSERA_OPENAI_URL` + `TESSERA_MODEL`
+  accept comma lists — one labeler per (url, model) pair.
+- `cache_prompt: true` on local logprob calls (llama-server KV opt-in).
+
+### Measured and decided (the harness arbitrates)
+- **Gold at scale is the honest configuration.** With 297 gold: the 95%
+  target is correctly refused (the 4B's best band is ~94% — the old 64%@95%
+  claim was under-sampled-gold optimism); at 90% the gate delivers 64%
+  coverage at 94.1% TRUE (97.2% unseen) — a conservative promise, kept with
+  margin. At 85%: 99.2% coverage at 86.4%.
+- **2B (low-end): an economy option only** — 129s/400 on M4 (projected
+  ~20 min/400 on X1-class CPUs) but 33.5% coverage @ 88.1% true at a 90%
+  target; 75.8% @ 85.8% at 85%. 9B fails the low-end bar (~20s/item
+  projected on X1) — bench-projected, not X1-measured.
+- **Retired by measurement:** the cross-family Gemma ensemble (63.0% @ 92.1%
+  unseen = identical to plain 4B at 1.5x cost); static few-shot for accuracy
+  (39% coverage vs plain's 64%); and its speed rationale — cross-item
+  partial-prefix KV reuse does not function on the current llama-server chat
+  endpoint regardless of cache-reuse/cache_prompt flags (identical-prompt
+  reuse works; 351 prefill tokens paid per item either way). Engine-level;
+  worth an upstream report.
+- **Specialist at 149 training examples earns zero honest coverage at 90%**
+  on noisy 4-class news — the mechanism works (0.5s training, ~instant
+  inference, honest gate); it awaits flywheel-scale corrections. Tier 1
+  carried the cascade at champion numbers (64.2% @ 94.2% true).
+
+## 0.8.0 — 2026-07-17
 ## 0.8.0 — 2026-07-17
 
 Speed AND accuracy: the logprob head + gold few-shot, measured head-to-head.
