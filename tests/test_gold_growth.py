@@ -63,6 +63,18 @@ class TestGoldGrowth(unittest.TestCase):
         self.assertEqual(gate.n_gold, len(self.storage.get_gold("demo")))
         self.assertGreater(gate.n_gold, self.gate.n_gold)
 
+    def test_regate_does_not_resurrect_reviewed_items(self):
+        # Dogfooding find: after a human works the whole queue, a re-gate must
+        # report an empty queue, not resurrect resolved items.
+        for p in self.routed:
+            record_human_action(self.storage, self.taxonomy, p.item_id, "accept",
+                                grow_gold=True)
+        gate = calibrate_and_gate(self.storage, "demo", self.taxonomy, 0.95, self.settings)
+        self.assertEqual(gate.n_queue, 0)
+        self.assertEqual(self.storage.counts("demo")["queued"], 0)
+        for p in self.routed:   # finals preserved
+            self.assertIsNotNone(self.storage.get_item(p.item_id).final_label)
+
     def test_default_off_in_record_human_action(self):
         before = len(self.storage.get_gold("demo"))
         record_human_action(self.storage, self.taxonomy, self.routed[0].item_id, "accept")

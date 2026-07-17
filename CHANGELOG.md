@@ -3,6 +3,24 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.7.1 — 2026-07-17
+
+### Fixed
+- **A re-gate no longer resurrects human-reviewed items into the queue.**
+  Found dogfooding a real 300-message spam-filter annotation run: after the
+  reviewer finished every item, re-gating reported the full queue again
+  (finals were preserved, but the count claimed work that was done). Human-
+  resolved items now stay out of the queue.
+
+### Dogfood run (2026-07-17, real user journey, $0)
+- 300 raw SMS downloaded, rubric written, 60-item gold hand-labeled, labeled
+  by a locally-served Qwen3.5-4B (released winc v1.26.0 binary, context pin
+  verified through the real install path), 39 human reviews (5 in the UI,
+  keyboard-first), training set exported. Hidden-reference audit: 93.3%
+  agreement overall — human decisions 29/29 (100%), auto 92.6% (~4-6 of the
+  20 disagreements are reference noise). Lesson recorded: a 2% audit at
+  n=10 cannot detect a ~7% auto error rate — size audits by count, not rate.
+
 ## 0.7.0 — 2026-07-17
 
 Phase 2 (Loop) instrumentation + the router experiment, decided by the harness.

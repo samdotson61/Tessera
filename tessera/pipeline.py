@@ -136,6 +136,13 @@ def calibrate_and_gate(storage, dataset_id, taxonomy, target_precision, settings
     already_audited = {e.item_id for e in events
                        if e.routed_to_human and e.route_reason == "audit"}
 
+    # A human already decided these: a re-gate must not put them back in the
+    # queue (found dogfooding — the queue count claimed work that was done).
+    for p in preds:
+        if p.routed and p.item_id in human_resolved:
+            p.routed = False
+            n_queue -= 1
+
     # Audit sampling (docs/04): a deterministic ~audit_rate slice of the auto
     # set is ALSO routed for human verification. The label still ships —
     # coverage is unchanged — but the verdict checks the SLA in production and
