@@ -303,6 +303,15 @@ async function toggleReport() {
     ul.appendChild(li);
   });
   body.appendChild(ul);
+  if (rep.runs && rep.runs.length > 1) {
+    const t = document.createElement("table");
+    t.className = "rep-runs";
+    t.innerHTML = "<tr><th>run</th><th>coverage</th><th>gold</th><th>queue</th><th>touches</th></tr>" +
+      rep.runs.map((r, i) =>
+        `<tr><td>${i + 1}</td><td>${fmtPct(r.coverage)}</td><td>${r.n_gold}</td>` +
+        `<td>${r.n_queue}</td><td>${r.human_touches}</td></tr>`).join("");
+    body.appendChild(t);
+  }
   sec.hidden = false;
 }
 

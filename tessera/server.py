@@ -51,7 +51,8 @@ def _queue_payload(ctx):
                 p.distribution.items(), key=lambda kv: kv[1], reverse=True)},
         }
 
-    out = [entry(p, False) for p in order_queue(preds)]
+    out = [entry(p, False) for p in order_queue(preds, items=items,
+                                                mode=ctx.settings.router)]
     # Audit items follow the routed queue: their labels already shipped, so
     # verification is second in priority to items with no label at all.
     out.extend(entry(p, True) for p in sorted(
@@ -99,7 +100,8 @@ def make_handler(ctx: Context):
                 if not ctx.last_gate:
                     return self._json({"error": "run gating first"}, 400)
                 report = build_quality_report(ctx.storage, ctx.dataset_id, ctx.taxonomy, ctx.last_gate)
-                return self._json(to_dict(report))
+                return self._json({**to_dict(report),
+                                   "runs": ctx.storage.get_runs(ctx.dataset_id, limit=12)})
             return self._json({"error": "not found"}, 404)
 
         def do_POST(self):

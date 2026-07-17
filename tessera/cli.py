@@ -94,6 +94,13 @@ def cmd_report(args):
                               judge=make_judge(settings))
     report = build_quality_report(storage, args.dataset, taxonomy, gate)
     print(json.dumps(to_dict(report), indent=2))
+    runs = storage.get_runs(args.dataset, limit=8)
+    if runs:
+        print("\n=== run history (coverage up, human effort visible) ===")
+        print(f"{'at':>20} {'coverage':>9} {'gold':>5} {'queue':>6} {'touches':>8}")
+        for r in runs:
+            print(f"{r['at']:>20} {r['coverage']:>9.1%} {r['n_gold']:>5} "
+                  f"{r['n_queue']:>6} {r['human_touches']:>8}")
     storage.close()
     return 0
 

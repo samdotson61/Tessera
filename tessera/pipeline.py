@@ -162,12 +162,18 @@ def calibrate_and_gate(storage, dataset_id, taxonomy, target_precision, settings
         elif p.routed and p.item_id not in human_resolved:
             storage.set_final_label(p.item_id, None)
 
-    return GateResult(
+    gate = GateResult(
         target_precision=target_precision, threshold=threshold, coverage=full_coverage,
         achieved_precision=achieved, n_auto=n_auto, n_queue=n_queue,
         n_gold=len(cal_confs), ece_before=ece_before, ece_after=ece_after,
         cross_validated=cross_validated, n_judge_vetoed=n_vetoed,
         n_audit_pending=n_audit, coverage_ci=(list(ci) if ci else None))
+    if log_events:
+        # Run-over-run instrumentation (docs/08 Phase 2): coverage up, human
+        # effort down — every gating run appends one row.
+        human_touches = sum(1 for e in events if e.routed_to_human)
+        storage.append_run(dataset_id, gate, human_touches)
+    return gate
 
 
 def _event_for(p, taxonomy, routed, human_action=None, final_label="__model__", reason=None):

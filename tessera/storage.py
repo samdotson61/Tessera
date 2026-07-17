@@ -44,6 +44,12 @@ CREATE TABLE IF NOT EXISTS events (
     taxonomy_version INTEGER, rubric_snapshot TEXT, modality TEXT, input_ref TEXT,
     latency_ms REAL, cost_usd REAL, annotator_id TEXT, timestamp TEXT
 );
+CREATE TABLE IF NOT EXISTS runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, dataset_id TEXT, at TEXT,
+    target REAL, threshold REAL, coverage REAL, achieved REAL,
+    n_auto INTEGER, n_queue INTEGER, n_gold INTEGER, n_audit_pending INTEGER,
+    human_touches INTEGER
+);
 CREATE INDEX IF NOT EXISTS idx_items_ds ON items(dataset_id);
 CREATE INDEX IF NOT EXISTS idx_pred_ds ON predictions(dataset_id);
 CREATE INDEX IF NOT EXISTS idx_events_ds ON events(dataset_id);
@@ -254,6 +260,25 @@ class Storage:
             rubric_snapshot=r["rubric_snapshot"], modality=r["modality"], input_ref=r["input_ref"],
             latency_ms=r["latency_ms"], cost_usd=r["cost_usd"], annotator_id=r["annotator_id"],
             timestamp=r["timestamp"], id=r["id"])
+
+    # ---- run history (docs/08 Phase 2 instrumentation) ----
+    def append_run(self, dataset_id, gate, human_touches):
+        from .schemas import now_iso
+        with self._lock:
+            self.conn.execute(
+                "INSERT INTO runs (dataset_id, at, target, threshold, coverage, achieved,"
+                " n_auto, n_queue, n_gold, n_audit_pending, human_touches)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (dataset_id, now_iso(), gate.target_precision, gate.threshold,
+                 gate.coverage, gate.achieved_precision, gate.n_auto, gate.n_queue,
+                 gate.n_gold, gate.n_audit_pending, human_touches))
+            self.conn.commit()
+
+    def get_runs(self, dataset_id, limit=20):
+        rows = self.conn.execute(
+            "SELECT * FROM runs WHERE dataset_id=? ORDER BY id DESC LIMIT ?",
+            (dataset_id, limit)).fetchall()
+        return [dict(r) for r in reversed(rows)]
 
     def counts(self, dataset_id) -> dict:
         c = self.conn.execute

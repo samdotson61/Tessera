@@ -41,6 +41,8 @@ class Settings:
     judge_model: str = ""             # judge model override; pick a different family than the labeler
     grow_gold: bool = True            # record human accept/edit decisions as gold (source "human")
     audit_rate: float = 0.02          # share of AUTO-APPLIED items also routed for human audit
+    router: str = "confidence"        # review-queue order: "confidence" (default — won the
+                                      # errors-found-per-review A/B) | "cluster" (experimental)
     host: str = "127.0.0.1"
     port: int = 8080
 
@@ -65,6 +67,7 @@ class Settings:
             judge_model=os.environ.get("TESSERA_JUDGE_MODEL", ""),
             grow_gold=os.environ.get("TESSERA_GROW_GOLD", "1") not in ("0", "false", "no"),
             audit_rate=float(os.environ.get("TESSERA_AUDIT_RATE", "0.02")),
+            router=os.environ.get("TESSERA_ROUTER", "confidence"),
             host=os.environ.get("TESSERA_HOST", "127.0.0.1"),
             port=int(os.environ.get("TESSERA_PORT", "8080")),
         )

@@ -3,6 +3,28 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.7.0 — 2026-07-17
+
+Phase 2 (Loop) instrumentation + the router experiment, decided by the harness.
+
+### Added
+- **Run-over-run instrumentation**: every gating run appends a row (coverage,
+  threshold, gold size, queue size, cumulative human touches) — visible in the
+  CLI report, the UI report panel, and `/api/report`. This is docs/08 Phase
+  2's "coverage up, effort down" made visible.
+- **Cluster-aware router (experimental, `TESSERA_ROUTER=cluster`)**: hashed
+  bag-of-words embeddings + leader clustering (stdlib), queue priority =
+  uncertainty × informativeness × representativeness with cluster
+  interleaving for diversity.
+- `scripts/simulate_review.py --router` for A/B-ing queue orderings.
+
+### Decided (the harness arbitrates — docs/08 Phase 2 risk rule)
+- **Confidence-first stays the default router.** Equal 86-review oracle
+  budgets on the local AG News run: confidence-only found 21 model errors,
+  the cluster formula 17 — representativeness weighting traded away raw
+  uncertainty. Cluster mode ships opt-in with its diversity rationale
+  documented; re-run the A/B on your own data before switching.
+
 ## 0.6.0 — 2026-07-17
 
 Span/NER — the third beachhead label type. Phase 1's "three label types live"

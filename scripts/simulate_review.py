@@ -42,6 +42,8 @@ def main():
     ap.add_argument("--target", type=float, default=0.95)
     ap.add_argument("--audit-rate", type=float, default=0.0,
                     help="audit share of the auto set (0 = queue-only baseline)")
+    ap.add_argument("--router", default="confidence", choices=["cluster", "confidence"],
+                    help="review-queue ordering to simulate")
     args = ap.parse_args()
 
     truth = {}
@@ -78,8 +80,10 @@ def main():
             break
         # Audit items first (they verify shipped labels — the SLA check), then
         # the routed queue in router order.
+        item_map = {it.id: it for it in storage.get_items(args.dataset)}
         audits = sorted((p for p in preds if p.audit), key=lambda p: p.item_id)
-        queue = audits + [p for p in order_queue(preds) if p.item_id not in reviewed]
+        queue = audits + [p for p in order_queue(preds, items=item_map, mode=args.router)
+                          if p.item_id not in reviewed]
         for p in queue[:args.batch]:
             want = truth.get(p.item_id)
             if want is None:
