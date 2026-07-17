@@ -87,7 +87,9 @@ The five ideas that make it more than "an LLM labels data":
    optional **LLM-as-judge** from a *different model family* reviews every
    auto-apply candidate (a veto can only narrow the auto set, never widen it).
 4. **Active-learning router** — the human queue is ordered most-uncertain-first,
-   spread across labels, so each correction teaches the system the most.
+   spread across labels, so each correction teaches the system the most. (A
+   cluster-based uncertainty×informativeness×representativeness router exists
+   too — the harness measured it below this baseline, so it ships opt-in.)
 5. **Flywheel** — every accept/edit/reject is captured as a training pair and can
    **grow the gold set**, so calibration tightens run over run — the corpus for
    distilling your own per-taxonomy labeler (see [`docs/05`](docs/05-data-flywheel-and-model-strategy.md)).
@@ -119,6 +121,7 @@ backoff, and a concurrent labeling pool.
 | `TESSERA_JUDGE_MODEL` | per provider | judge model override |
 | `TESSERA_GROW_GOLD` | `1` | record review accepts/edits as gold (source `human`) |
 | `TESSERA_AUDIT_RATE` | `0.02` | share of auto-applied items also routed for human audit |
+| `TESSERA_ROUTER` | `confidence` | queue order; `cluster` = experimental AL formula (lost the first errors-found A/B 17–21) |
 
 ## Run it on a real dataset
 
@@ -207,7 +210,8 @@ tessera/            core package (stdlib only)
   labelers/         stub (offline), Anthropic/OpenAI labelers (self-consistency
                     + cache + retries), and the LLM-as-judge
   engine/           confidence · calibration · metrics (CIs, reliability) ·
-                    gating · router · goldset · verify
+                    gating · router (+embed clusters) · goldset · verify ·
+                    audit sampling · spans
   pipeline.py       the orchestrator (label → calibrate+gate+judge → human action/undo)
   flywheel.py       training-pair export + event stats
   quality.py        the dataset quality report
@@ -231,9 +235,12 @@ beachhead label types** — classification, pairwise/preference, and span/NER
 (each producing a calibrated coverage@precision number, the Phase 1 exit
 criterion). Still open: a frontier-model coverage@precision number on a real
 partner dataset (the tooling is in `scripts/`; it needs an API key — local
-models measured free, see above). Phases 2–4 (active-learning at scale,
-per-customer model distillation, the cross-task "Composer" labeler) are
-designed in `docs/`, not yet built. See
+models measured free, see above). Phase 2 (Loop) has begun: run-over-run
+instrumentation ships, and the cluster router was built and A/B'd — the
+harness kept confidence-first as default (21 vs 17 errors found at equal
+budgets). Still ahead: the rest of Phase 2 (event lake, real-usage
+dashboards), Phase 3 (per-customer distillation), and Phase 4 (the cross-task
+"Composer" labeler), designed in `docs/`. See
 [`docs/09`](docs/09-risks-open-questions-and-glossary.md) for risks and open
 questions.
 
