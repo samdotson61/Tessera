@@ -117,6 +117,8 @@ backoff, and a concurrent labeling pool.
 | `TESSERA_SAMPLES` | `5` | self-consistency samples per item |
 | `TESSERA_CACHE` | `tessera_cache.db` | LLM response cache; `none` disables |
 | `TESSERA_WORKERS` | `8` | concurrent items in the labeling pass |
+| `TESSERA_FEWSHOT` | `0` | k nearest gold examples shown in the prompt (RAG-lite, classification) |
+| `TESSERA_LOGPROBS` | `0` | logprob-head classification: 1 call/item, token-probability confidence (openai-shaped local servers) |
 | `TESSERA_JUDGE` | off | LLM-as-judge provider — use a *different family* than the labeler |
 | `TESSERA_JUDGE_MODEL` | per provider | judge model override |
 | `TESSERA_GROW_GOLD` | `1` | record review accepts/edits as gold (source `human`) |
@@ -164,12 +166,25 @@ python -m tessera --db agnews.db label --data data/agnews/items.jsonl \
 greedy serve (single sample) and one on a sampling serve (5-vote
 self-consistency):
 
-| run | target | coverage | CV estimate | true (all auto) | true (unseen) |
+| run | target | wall | coverage | true (all auto) | true (unseen) |
 |---|---|---|---|---|---|
-| Qwen3.5-4B greedy, 1 sample | 95% | 27.5% | 97.0% | 93.6% | 92.2% |
-| Qwen3.5-4B sampled, 5 votes | 95% | 46.8% | 98.2% | 92.5% | 90.1% |
-| **Claude Haiku 4.5**, 5 votes (~$1.30) | 95% | **0.0%** | — | — | — |
-| Claude Haiku 4.5, 5 votes | 90% | **89.0%** | 92.9% | 88.8% | 87.2% |
+| Qwen3.5-4B greedy, 1 sample | 95% | ~5 min | 27.5% | 93.6% | 92.2% |
+| Qwen3.5-4B sampled, 5 votes | 95% | ~15 min | 46.8% | 92.5% | 90.1% |
+| Qwen3.5-4B rubric v2 + 4-shot, 5 votes | 95% | ~33 min | 56.8% | 93.0% | 91.2% |
+| **Qwen3.5-4B logprob head** | 95% | **5.1 min** | **64.0%** | **94.1%** | **92.1%** |
+| Qwen3.5-4B logprob + 4-shot | 95% | 6.9 min | 78.0% | 91.7% | 89.9% |
+| Claude Haiku 4.5, 5 votes (~$1.30) | 95% | ~13 min | 0.0% | — | — |
+| Claude Haiku 4.5, 5 votes | 90% | ~13 min | 89.0% | 88.8% | 87.2% |
+
+**The logprob head** (`TESSERA_LOGPROBS=1`, llama-server/vLLM) asks for the
+label as one word and reads the answer token's top-logprobs as the label
+distribution — one call per item. It beat 5-vote self-consistency on every
+axis at once: 3× faster, +17pts coverage, +2pts true precision. Verbalized
+confidence is the model's *opinion about* its answer; the token distribution
+*is* the answer's uncertainty. Adding 4-shot gold retrieval on top trades
++14pts more coverage for ~−2pts precision — the right call at a 90% target,
+the wrong one at 95%. The local 4B with a logprob head also *beats Haiku
+4.5's verbalized confidence* on this task at both targets.
 
 The frontier comparison (2026-07-17) added three more lessons:
 

@@ -10,7 +10,7 @@ __all__ = ["Labeler", "softmax", "KeywordStubLabeler", "make_stub_ensemble",
            "LLMLabeler", "ResponseCache", "open_cache", "make_labelers"]
 
 
-def make_labelers(settings):
+def make_labelers(settings, examples=None):
     """Return the labeler ensemble for the configured provider(s).
 
     TESSERA_PROVIDER accepts a comma list ("anthropic,openai") for the
@@ -35,5 +35,7 @@ def make_labelers(settings):
                 cache = open_cache(settings.cache_path)
             labelers.append(LLMLabeler(
                 provider, key, model=model, n_samples=settings.llm_samples,
-                cache=cache, base_url=url))
+                cache=cache, base_url=url,
+                examples=examples, fewshot=getattr(settings, "fewshot", 0),
+                logprobs=getattr(settings, "logprobs", False)))
     return labelers or make_stub_ensemble()

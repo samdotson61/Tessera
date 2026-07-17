@@ -72,7 +72,8 @@ class LLMLabeler(Labeler):
     def __init__(self, provider: str = "anthropic", api_key: str = "",
                  model: str | None = None, model_id: str | None = None,
                  n_samples: int = 5, cache: ResponseCache | None = None,
-                 max_retries: int = 3, transport=None, base_url: str = ""):
+                 max_retries: int = 3, transport=None, base_url: str = "",
+                 examples=None, fewshot: int = 0, logprobs: bool = False):
         self.provider = provider
         self.api_key = api_key
         # base_url points the provider-shaped request at any compatible
@@ -87,11 +88,46 @@ class LLMLabeler(Labeler):
         self.cache = cache
         self.max_retries = max_retries
         self._transport = transport or self._http_call  # injectable for offline tests
+        # Gold few-shot (docs/05 Phase A RAG-lite): the k nearest gold examples
+        # (hashed-BoW cosine) are shown in the prompt. Classification only.
+        self.fewshot = max(0, fewshot)
+        # Logprob head (classification, openai-shaped local servers): one call
+        # per item, the label token's top-logprobs ARE the distribution —
+        # continuous confidence at 1/5th the calls of self-consistency voting.
+        self.logprobs = bool(logprobs) and provider == "openai"
+        self._examples = []
+        if examples and self.fewshot:
+            from ..engine.embed import embed
+            self._examples = [(embed(t), t, lab) for t, lab in examples]
+
+    def _fewshot_block(self, item_text: str) -> str:
+        if not self._examples:
+            return ""
+        from ..engine.embed import embed, cosine
+        v = embed(item_text)
+        ranked = sorted(self._examples, key=lambda e: cosine(v, e[0]), reverse=True)
+        lines = ["", "Examples of correct labels:"]
+        n = 0
+        for _, t, lab in ranked:
+            if t == item_text:
+                continue   # never leak the item's own gold label
+            answer = lab if self.logprobs else f'{{"label": "{lab}"}}'
+            lines.append(f'Text: {t}\nAnswer: {answer}')
+            n += 1
+            if n >= self.fewshot:
+                break
+        return "\n".join(lines) + "\n" if n else ""
 
     def label(self, item: Item, taxonomy: Taxonomy) -> LabelOutput:
-        prompt = taxonomy.to_prompt() + "\n\nText:\n" + item.render()
-        labels = taxonomy.labels
         span_mode = taxonomy.label_type == "span"
+        fewshot = ("" if span_mode or taxonomy.label_type == "pairwise"
+                   else self._fewshot_block(item.render()))
+        if self.logprobs and taxonomy.label_type == "classification":
+            prompt = (taxonomy.to_prompt(style="word") + "\n" + fewshot +
+                      "\nText:\n" + item.render() + "\nAnswer:")
+            return self._label_logprob(prompt, taxonomy.labels)
+        prompt = taxonomy.to_prompt() + "\n" + fewshot + "\nText:\n" + item.render()
+        labels = taxonomy.labels
         samples = []          # (label, conf, rationale) per successful sample
         last_err = None
         for s in range(self.n_samples):
@@ -153,6 +189,49 @@ class LLMLabeler(Labeler):
             raise ValueError("LLM response missing 'label'")
         return str(label), float(obj.get("confidence", 0.7)), str(obj.get("rationale", ""))
 
+    def _label_logprob(self, prompt: str, labels: list) -> LabelOutput:
+        """One call; the first answer token's top-logprobs become the label
+        distribution. Tokens are matched to labels by unambiguous prefix (a
+        token claiming several labels is dropped); unmatched probability mass
+        is discarded and the rest renormalized — mass that went to non-label
+        tokens is real uncertainty and should flatten the result."""
+        import math as _math
+        key = ResponseCache.key(self.provider, self.model, "lp-v1", prompt, 0)
+        raw = self.cache.get(key) if self.cache else None
+        if raw is None:
+            try:
+                raw = self._call_with_retries(prompt)
+            except Exception as e:
+                uniform = {l: 1.0 / len(labels) for l in labels} if labels else {}
+                return LabelOutput(self.model_id, uniform, f"LLM error: {e}")
+            if self.cache is not None:
+                self.cache.put(key, raw)
+        try:
+            body = json.loads(raw)
+            tops = body["top_logprobs"]
+            answer = str(body.get("content", "")).strip()
+        except (ValueError, KeyError, TypeError):
+            uniform = {l: 1.0 / len(labels) for l in labels} if labels else {}
+            return LabelOutput(self.model_id, uniform, "logprobs unavailable in reply")
+        dist = {l: 0.0 for l in labels}
+        for entry in tops:
+            tok = str(entry.get("token", "")).strip().lower()
+            if not tok:
+                continue
+            matches = [l for l in labels if l.lower().startswith(tok)]
+            if len(matches) == 1:
+                dist[matches[0]] += _math.exp(float(entry["logprob"]))
+        z = sum(dist.values())
+        if z <= 0:   # nothing matched a label: route it
+            dist = {l: 1.0 / len(labels) for l in labels}
+            return LabelOutput(self.model_id, dist,
+                               f"no label mass in logprobs (answer {answer!r})")
+        dist = {l: v / z for l, v in dist.items()}
+        best = max(dist, key=dist.get)
+        return LabelOutput(self.model_id, dist,
+                           f"logprob head: P({best})={dist[best]:.3f}, "
+                           f"label mass {z:.3f}")
+
     def _sample_span(self, prompt: str, sample_idx: int, text: str):
         """One completion for a span item -> (canonical annotation, conf, rationale).
 
@@ -210,14 +289,24 @@ class LLMLabeler(Labeler):
             with urllib.request.urlopen(req, timeout=180) as r:
                 body = json.loads(r.read())
             return body["content"][0]["text"]
+        payload = {"model": self.model, "max_tokens": 256,
+                   "messages": [{"role": "user", "content": prompt}]}
+        if self.logprobs:
+            payload["max_tokens"] = 5
+            payload["logprobs"] = True
+            payload["top_logprobs"] = 20
         req = urllib.request.Request(
-            self.base_url,
-            data=json.dumps({
-                "model": self.model, "max_tokens": 256,
-                "messages": [{"role": "user", "content": prompt}],
-            }).encode(),
+            self.base_url, data=json.dumps(payload).encode(),
             headers={"Authorization": f"Bearer {self.api_key or 'local'}",
                      "content-type": "application/json"})
         with urllib.request.urlopen(req, timeout=180) as r:
             body = json.loads(r.read())
-        return body["choices"][0]["message"]["content"]
+        choice = body["choices"][0]
+        if self.logprobs:
+            content_lp = (choice.get("logprobs") or {}).get("content") or []
+            tops = content_lp[0].get("top_logprobs", []) if content_lp else []
+            return json.dumps({
+                "content": choice["message"].get("content", ""),
+                "top_logprobs": [{"token": t.get("token", ""),
+                                  "logprob": t.get("logprob", -100.0)} for t in tops]})
+        return choice["message"]["content"]

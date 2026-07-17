@@ -192,3 +192,74 @@ class TestConcurrentPass(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFewshot(unittest.TestCase):
+    def test_nearest_gold_examples_in_prompt_and_self_excluded(self):
+        seen = {}
+        def transport(prompt):
+            seen["prompt"] = prompt
+            return _resp("a")
+        examples = [("alpha apple text", "a"), ("beta banana text", "b"),
+                    ("gamma grape text", "c"), ("alpha alpha", "a")]
+        lab = LLMLabeler("anthropic", "k", n_samples=1, transport=transport,
+                         examples=examples, fewshot=2)
+        lab.label(ITEM, TAX)   # ITEM text: "alpha alpha"
+        self.assertIn("Examples of correct labels:", seen["prompt"])
+        self.assertIn("alpha apple text", seen["prompt"])       # nearest neighbor
+        self.assertNotIn("gamma grape text", seen["prompt"])    # not in top-k
+        self.assertEqual(seen["prompt"].count('Answer: {"label"'), 2)
+        # the item's own gold row is never leaked
+        self.assertNotIn('Text: alpha alpha\nAnswer', seen["prompt"])
+
+    def test_fewshot_off_by_default(self):
+        seen = {}
+        def transport(prompt):
+            seen["prompt"] = prompt
+            return _resp("a")
+        LLMLabeler("anthropic", "k", n_samples=1, transport=transport,
+                   examples=[("x", "a")]).label(ITEM, TAX)
+        self.assertNotIn("Examples of correct labels:", seen["prompt"])
+
+
+class TestLogprobHead(unittest.TestCase):
+    def _lp_reply(self, tops, content=" a"):
+        return json.dumps({"content": content, "top_logprobs": tops})
+
+    def test_distribution_from_token_logprobs(self):
+        import math
+        tops = [{"token": " a", "logprob": math.log(0.7)},
+                {"token": " b", "logprob": math.log(0.2)},
+                {"token": "\n", "logprob": math.log(0.1)}]
+        lab = LLMLabeler("openai", "k", transport=lambda p: self._lp_reply(tops),
+                         logprobs=True)
+        out = lab.label(ITEM, TAX)
+        self.assertEqual(out.top()[0], "a")
+        self.assertAlmostEqual(out.distribution["a"], 0.7 / 0.9, places=3)
+        self.assertAlmostEqual(out.distribution["b"], 0.2 / 0.9, places=3)
+        self.assertIn("logprob head", out.rationale)
+
+    def test_prompt_is_word_style_single_call(self):
+        seen = {"n": 0}
+        def transport(prompt):
+            seen["n"] += 1
+            seen["prompt"] = prompt
+            return self._lp_reply([{"token": "a", "logprob": -0.1}])
+        LLMLabeler("openai", "k", n_samples=5, transport=transport,
+                   logprobs=True).label(ITEM, TAX)
+        self.assertEqual(seen["n"], 1)                      # ONE call despite n_samples=5
+        self.assertIn("ONLY the label word", seen["prompt"])
+        self.assertTrue(seen["prompt"].rstrip().endswith("Answer:"))
+
+    def test_no_label_mass_routes_uniform(self):
+        out = LLMLabeler("openai", "k", logprobs=True,
+                         transport=lambda p: self._lp_reply(
+                             [{"token": "zzz", "logprob": -0.1}])).label(ITEM, TAX)
+        self.assertAlmostEqual(max(out.distribution.values()), 1.0 / 3, places=6)
+        self.assertIn("no label mass", out.rationale)
+
+    def test_anthropic_provider_ignores_logprobs_flag(self):
+        t = FakeTransport([_resp("a")])
+        lab = LLMLabeler("anthropic", "k", n_samples=1, transport=t, logprobs=True)
+        self.assertFalse(lab.logprobs)
+        self.assertEqual(lab.label(ITEM, TAX).top()[0], "a")

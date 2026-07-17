@@ -35,6 +35,11 @@ class Settings:
     openai_url: str = ""              # alternate /v1/chat/completions endpoint (e.g.
                                       # ollama/vLLM/llama-server); key optional then
     llm_samples: int = 5              # self-consistency samples per item (LLM labelers)
+    fewshot: int = 0                  # k nearest gold examples in the prompt (0 = off);
+                                      # docs/05 Phase A RAG-lite, classification only
+    logprobs: bool = False            # classification via the label token's logprobs:
+                                      # 1 call/item, continuous confidence (openai-shaped
+                                      # local servers only — llama-server/vLLM)
     cache_path: str = "tessera_cache.db"   # LLM response cache; "none" disables
     workers: int = 8                  # concurrent items in the labeling pass
     judge_provider: str = ""          # LLM-as-judge: "anthropic" | "openai" | "" (off).
@@ -61,6 +66,8 @@ class Settings:
             anthropic_url=os.environ.get("TESSERA_ANTHROPIC_URL", ""),
             openai_url=os.environ.get("TESSERA_OPENAI_URL", ""),
             llm_samples=int(os.environ.get("TESSERA_SAMPLES", "5")),
+            fewshot=int(os.environ.get("TESSERA_FEWSHOT", "0")),
+            logprobs=os.environ.get("TESSERA_LOGPROBS", "0") in ("1", "true", "yes"),
             cache_path=os.environ.get("TESSERA_CACHE", "tessera_cache.db"),
             workers=int(os.environ.get("TESSERA_WORKERS", "8")),
             judge_provider=os.environ.get("TESSERA_JUDGE", ""),

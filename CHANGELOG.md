@@ -3,6 +3,37 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.8.0 — 2026-07-17
+
+Speed AND accuracy: the logprob head + gold few-shot, measured head-to-head.
+
+### Added
+- **Logprob-head classification** (`TESSERA_LOGPROBS=1`, openai-shaped local
+  servers — llama-server/vLLM): the prompt asks for the label as ONE word and
+  the first answer token's top-logprobs become the label distribution. One
+  call per item instead of N samples; continuous, honestly-calibratable
+  confidence instead of verbalized buckets. Unmatched token mass is discarded
+  and the rest renormalized; zero label mass routes the item.
+- **Gold few-shot retrieval** (`TESSERA_FEWSHOT=k`, docs/05 Phase A RAG-lite):
+  the k nearest gold examples (hashed-BoW cosine) are shown in the prompt,
+  self-leak guarded. Classification only.
+- AG News sample rubric v2 (explicit boundary rules for the measured
+  world/business/scitech confusions).
+
+### Measured (Qwen3.5-4B local, 400 AG News items, 95% target, truth-validated)
+| config | wall | coverage | true unseen |
+|---|---|---|---|
+| 5-vote baseline | ~15.5 min | 46.8% | 90.1% |
+| rubric v2 + fewshot4, 5-vote | ~33 min | 56.8% | 91.2% |
+| logprob head, plain | 5.1 min | 64.0% | 92.1% |
+| logprob + fewshot4 | 6.9 min | 78.0% | 89.9% |
+
+The logprob head dominates: 3x faster than the baseline with +17pts coverage
+and +2pts true precision. Few-shot on top buys +14pts more coverage at ~-2pts
+precision — a defensible choice at a 90% target, not at 95%. Verbalized
+confidence is the model's opinion about its answer; the token distribution IS
+the answer's uncertainty.
+
 ## 0.7.1 — 2026-07-17
 
 ### Fixed

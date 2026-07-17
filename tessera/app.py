@@ -97,7 +97,12 @@ def ingest(storage, dataset_id, name, items, taxonomy, gold=None):
 def run_full(storage, dataset_id, taxonomy, settings, target_precision=None):
     """Run the labeling pass then calibrate + gate. Returns GateResult."""
     target = target_precision if target_precision is not None else settings.target_precision
-    labelers = make_labelers(settings)
+    examples = None
+    if getattr(settings, "fewshot", 0):
+        gold = storage.get_gold(dataset_id)
+        items = {it.id: it for it in storage.get_items(dataset_id)}
+        examples = [(items[iid].render(), lab) for iid, lab in gold.items() if iid in items]
+    labelers = make_labelers(settings, examples=examples)
     run_labeling_pass(storage, dataset_id, taxonomy, labelers, workers=settings.workers)
     return calibrate_and_gate(storage, dataset_id, taxonomy, target, settings,
                               judge=make_judge(settings))

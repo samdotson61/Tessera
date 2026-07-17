@@ -73,7 +73,17 @@ class Taxonomy:
     def allowed_labels(self) -> list:
         return list(self.labels)
 
-    def to_prompt(self) -> str:
+    def to_prompt(self, style: str = "json") -> str:
+        if style == "word" and self.label_type == LabelType.CLASSIFICATION.value:
+            # Single-word answer for logprob-head labeling: the label's first
+            # token carries the whole distribution.
+            lines = ["Task: assign exactly one label to the text below.",
+                     f"Guidelines: {self.guidelines}".rstrip(), "Labels:"]
+            for lab in self.labels:
+                d = self.definitions.get(lab, "")
+                lines.append(f"- {lab}: {d}" if d else f"- {lab}")
+            lines.append("Respond with ONLY the label word, nothing else.")
+            return "\n".join(lines)
         if self.label_type == LabelType.SPAN.value:
             lines = [
                 "Task: extract every entity span from the text below.",
