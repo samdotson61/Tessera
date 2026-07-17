@@ -17,6 +17,8 @@ def ensemble(outputs):
     labels = set()
     for o in outputs:
         labels |= set(o.distribution)
+    if not labels:   # every member failed soft (e.g. span samples all unparsable)
+        return (None, 0.0, 0.0, {o.model_id: None for o in outputs}, {})
     mean = {l: sum(o.distribution.get(l, 0.0) for o in outputs) / len(outputs) for l in labels}
     z = sum(mean.values()) or 1.0
     mean = {l: v / z for l, v in mean.items()}

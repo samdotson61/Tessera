@@ -1,0 +1,20 @@
+{"id": "s01", "spans": [{"text": "Chen", "type": "person"}, {"text": "Johnson", "type": "person"}, {"text": "Oslo", "type": "location"}]}
+{"id": "s02", "spans": [{"text": "Acme", "type": "org"}, {"text": "Karachi", "type": "location"}]}
+{"id": "s03", "spans": [{"text": "Mueller", "type": "person"}, {"text": "Globex", "type": "org"}, {"text": "Geneva", "type": "location"}]}
+{"id": "s04", "spans": [{"text": "Tanaka", "type": "person"}, {"text": "Initech", "type": "org"}, {"text": "Springfield", "type": "location"}]}
+{"id": "s05", "spans": [{"text": "Okafor", "type": "person"}, {"text": "Reyes", "type": "person"}, {"text": "Vostok", "type": "location"}]}
+{"id": "s06", "spans": [{"text": "Garcia", "type": "person"}, {"text": "Rivertown", "type": "location"}]}
+{"id": "s07", "spans": [{"text": "Lindqvist", "type": "person"}, {"text": "Oslo", "type": "location"}, {"text": "Karachi", "type": "location"}]}
+{"id": "s08", "spans": [{"text": "Globex", "type": "org"}, {"text": "Initech", "type": "org"}]}
+{"id": "s09", "spans": [{"text": "Johnson", "type": "person"}, {"text": "Acme", "type": "org"}, {"text": "Lakeside", "type": "location"}]}
+{"id": "s10", "spans": [{"text": "Reyes", "type": "person"}, {"text": "Geneva", "type": "location"}, {"text": "Springfield", "type": "location"}]}
+{"id": "s11", "spans": [{"text": "Chen", "type": "person"}, {"text": "Vostok", "type": "location"}]}
+{"id": "s12", "spans": [{"text": "Tanaka", "type": "person"}, {"text": "Rivertown", "type": "location"}]}
+{"id": "s13", "spans": [{"text": "Okafor", "type": "person"}, {"text": "Lakeside", "type": "location"}]}
+{"id": "s14", "spans": [{"text": "Rivertown Council", "type": "org"}]}
+{"id": "s15", "spans": [{"text": "Garcia", "type": "person"}]}
+{"id": "s16", "spans": [{"text": "Karachi Consortium", "type": "org"}]}
+{"id": "s17", "spans": [{"text": "Mueller", "type": "person"}]}
+{"id": "s18", "spans": [{"text": "Springfield Ministry", "type": "org"}]}
+{"id": "s19", "spans": [{"text": "Chen", "type": "person"}, {"text": "Oslo", "type": "location"}]}
+{"id": "s20", "spans": [{"text": "Globex Labs", "type": "org"}]}

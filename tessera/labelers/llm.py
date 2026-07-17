@@ -91,28 +91,42 @@ class LLMLabeler(Labeler):
     def label(self, item: Item, taxonomy: Taxonomy) -> LabelOutput:
         prompt = taxonomy.to_prompt() + "\n\nText:\n" + item.render()
         labels = taxonomy.labels
+        span_mode = taxonomy.label_type == "span"
         samples = []          # (label, conf, rationale) per successful sample
         last_err = None
         for s in range(self.n_samples):
             try:
-                label, conf, rationale = self._sample(prompt, s)
+                if span_mode:
+                    label, conf, rationale = self._sample_span(prompt, s, item.render())
+                else:
+                    label, conf, rationale = self._sample(prompt, s)
+                    if label not in labels and labels:
+                        label = labels[0]
             except Exception as e:
                 last_err = e
                 continue
-            if label not in labels and labels:
-                label = labels[0]
             samples.append((label, max(0.0, min(1.0, conf)), rationale))
-        if not samples:  # fail soft -> uniform, low-confidence, gets routed
+        if not samples:  # fail soft -> low-information output, gets routed
+            if span_mode:
+                return LabelOutput(self.model_id, {}, f"LLM error: {last_err}")
             uniform = {l: 1.0 / len(labels) for l in labels} if labels else {}
             return LabelOutput(self.model_id, uniform, f"LLM error: {last_err}")
 
         # Average the per-sample distributions: vote agreement and verbalized
         # confidence both shape the result (5 confident agreeing samples -> sharp;
         # split votes or hedged confidences -> flat -> routed to a human).
-        mean = {l: 0.0 for l in labels} if labels else {}
-        for label, conf, _ in samples:
-            for l, v in _spread(label, conf, labels).items():
-                mean[l] = mean.get(l, 0.0) + v / len(samples)
+        # Span mode votes over whole annotations (each sample's canonical
+        # span-set is one candidate) — a boundary or type disagreement between
+        # samples flattens the distribution exactly like a label disagreement.
+        if span_mode:
+            mean = {}
+            for ann, conf, _ in samples:
+                mean[ann] = mean.get(ann, 0.0) + conf / len(samples)
+        else:
+            mean = {l: 0.0 for l in labels} if labels else {}
+            for label, conf, _ in samples:
+                for l, v in _spread(label, conf, labels).items():
+                    mean[l] = mean.get(l, 0.0) + v / len(samples)
         z = sum(mean.values()) or 1.0
         mean = {l: v / z for l, v in mean.items()}
         winner = max(mean, key=mean.get)
@@ -138,6 +152,30 @@ class LLMLabeler(Labeler):
         if not label:
             raise ValueError("LLM response missing 'label'")
         return str(label), float(obj.get("confidence", 0.7)), str(obj.get("rationale", ""))
+
+    def _sample_span(self, prompt: str, sample_idx: int, text: str):
+        """One completion for a span item -> (canonical annotation, conf, rationale).
+
+        The prompt asks for exact quotes (models are unreliable with character
+        offsets); quotes are resolved to offsets here. An unresolvable quote
+        fails the sample — fail-soft routing beats shipping a guessed offset.
+        """
+        from ..engine import spans as spans_mod
+        key = ResponseCache.key(self.provider, self.model, "span-v1", prompt, sample_idx)
+        raw = self.cache.get(key) if self.cache else None
+        if raw is None:
+            raw = self._call_with_retries(prompt)
+            if self.cache is not None:
+                self.cache.put(key, raw)
+        obj = json.loads(_extract_json(raw))
+        quoted = obj.get("spans")
+        if not isinstance(quoted, list):
+            raise ValueError("LLM response missing 'spans' list")
+        spans, unresolved = spans_mod.resolve_quoted(quoted, text)
+        if unresolved:
+            raise ValueError(f"unresolvable span quote(s): {unresolved[:3]}")
+        return (spans_mod.canonical(spans), float(obj.get("confidence", 0.7)),
+                str(obj.get("rationale", "")))
 
     def _call_with_retries(self, prompt: str) -> str:
         delay = 1.0

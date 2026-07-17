@@ -54,6 +54,9 @@ class TestCoverageAtPrecisionRegression(unittest.TestCase):
     def test_pairwise_baseline_holds(self):
         self._check("pairwise")
 
+    def test_span_baseline_holds(self):
+        self._check("span")
+
 
 if __name__ == "__main__":
     unittest.main()

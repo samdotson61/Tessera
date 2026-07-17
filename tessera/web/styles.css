@@ -54,3 +54,13 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
 .rel-tick { fill: var(--muted); font-size: 10px; }
 .rel-label { fill: var(--muted); font-size: 11px; }
 .audit-tag { margin-left: 8px; color: var(--mid); border: 1px solid var(--mid); border-radius: 4px; padding: 0 6px; font-size: 11px; }
+.span-text { line-height: 2.1; }
+.ent { border-radius: 4px; padding: 1px 3px; cursor: pointer; }
+.ent-type { font-size: 9px; margin-left: 2px; opacity: .85; }
+.ent-0 { background: rgba(110,168,254,.22); box-shadow: inset 0 -2px 0 #6ea8fe; }
+.ent-1 { background: rgba(63,185,80,.22); box-shadow: inset 0 -2px 0 #3fb950; }
+.ent-2 { background: rgba(210,153,34,.22); box-shadow: inset 0 -2px 0 #d29922; }
+.ent-3 { background: rgba(248,81,73,.22); box-shadow: inset 0 -2px 0 #f85149; }
+.ent-4 { background: rgba(163,113,247,.22); box-shadow: inset 0 -2px 0 #a371f7; }
+.ent-5 { background: rgba(57,197,187,.22); box-shadow: inset 0 -2px 0 #39c5bb; }
+.ent-btn { border-width: 2px; }

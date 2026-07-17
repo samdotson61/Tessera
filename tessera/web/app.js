@@ -5,6 +5,8 @@
 let queue = [];
 let idx = 0;
 let labels = [];
+let labelType = "classification";
+let currentSpans = [];   // span-mode working copy of the annotation being reviewed
 
 async function getJSON(url) { const r = await fetch(url); return r.json(); }
 async function postJSON(url, body) {
@@ -20,6 +22,13 @@ function fmtPct(x) { return (x * 100).toFixed(1) + "%"; }
 async function refreshState() {
   const s = await getJSON("/api/state");
   labels = s.taxonomy.labels;
+  labelType = s.taxonomy.label_type || "classification";
+  if (labelType === "span") {
+    document.querySelector(".hint").innerHTML =
+      "<b>select text + 1–9</b> add span · <b>click a span</b> remove · " +
+      "<b>Enter</b>/<b>A</b> submit · <b>R</b> reject · <b>U</b> undo · " +
+      "<b>J/K</b> next/prev · <b>E</b> explain · <b>Q</b> report";
+  }
   const c = s.counts;
   document.getElementById("stats").textContent =
     `${c.items} items · ${c.auto_applied} auto · ${c.queued} queued · ${c.finalized} finalized` +
@@ -38,6 +47,89 @@ async function refreshQueue() {
   queue = q.queue || [];
   idx = 0;
   render();
+}
+
+// ---- span mode (NER): highlight, click-to-remove, select+number to add ----
+
+function canonicalSpans(spans) {
+  const uniq = [...new Map(spans.map(s => [`${s.start}|${s.end}|${s.type}`, s])).values()]
+    .sort((a, b) => a.start - b.start || a.end - b.end ||
+                    (a.type < b.type ? -1 : a.type > b.type ? 1 : 0));
+  return JSON.stringify(uniq.map(s => ({start: s.start, end: s.end, type: s.type})));
+}
+
+function renderSpanText(item) {
+  const box = document.getElementById("text");
+  box.textContent = "";
+  box.classList.add("span-text");
+  const text = item.text;
+  let pos = 0;
+  [...currentSpans].sort((a, b) => a.start - b.start).forEach((s) => {
+    if (s.start > pos) box.appendChild(document.createTextNode(text.slice(pos, s.start)));
+    const m = document.createElement("span");
+    m.className = "ent ent-" + (labels.indexOf(s.type) % 6);
+    m.title = s.type + " — click to remove";
+    m.textContent = text.slice(s.start, s.end);
+    const tag = document.createElement("sup");
+    tag.className = "ent-type";
+    tag.textContent = s.type;
+    m.appendChild(tag);
+    m.onclick = () => {
+      currentSpans = currentSpans.filter((x) => x !== s);
+      renderSpanText(item);
+      updateSpanSummary();
+    };
+    box.appendChild(m);
+    pos = s.end;
+  });
+  if (pos < text.length) box.appendChild(document.createTextNode(text.slice(pos)));
+}
+
+function offsetInText(container, node, offset) {
+  let total = 0, found = false;
+  (function walk(n) {
+    if (found) return;
+    if (n === node) { total += offset; found = true; return; }
+    if (n.nodeType === 3) { total += n.length; return; }
+    if (n.classList && n.classList.contains("ent-type")) return;  // type tags aren't item text
+    for (const c of n.childNodes) { walk(c); if (found) return; }
+  })(container);
+  return found ? total : -1;
+}
+
+function addSpanFromSelection(i) {
+  const item = queue[idx];
+  if (!item || i >= labels.length) return;
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+  const box = document.getElementById("text");
+  const r = sel.getRangeAt(0);
+  if (!box.contains(r.startContainer) || !box.contains(r.endContainer)) return;
+  let a = offsetInText(box, r.startContainer, r.startOffset);
+  let b = offsetInText(box, r.endContainer, r.endOffset);
+  if (a < 0 || b < 0 || a === b) return;
+  if (a > b) [a, b] = [b, a];
+  if (currentSpans.some((s) => a < s.end && s.start < b)) return;  // no overlaps
+  currentSpans.push({ start: a, end: b, type: labels[i] });
+  sel.removeAllRanges();
+  renderSpanText(item);
+  updateSpanSummary();
+}
+
+function updateSpanSummary() {
+  const item = queue[idx];
+  const cur = canonicalSpans(currentSpans);
+  const pred = canonicalSpans(JSON.parse(item.predicted_label || "[]"));
+  document.getElementById("suggested").textContent =
+    `${currentSpans.length} span(s)` + (cur === pred ? "" : " (edited)");
+}
+
+function submitSpans() {
+  const item = queue[idx];
+  if (!item) return;
+  const cur = canonicalSpans(currentSpans);
+  const pred = canonicalSpans(JSON.parse(item.predicted_label || "[]"));
+  decide(cur === pred ? "accept" : "edit", cur);
 }
 
 function renderText(item) {
@@ -93,8 +185,14 @@ function render() {
   const conf = document.getElementById("conf");
   conf.textContent = `confidence ${fmtPct(item.confidence)} · agreement ${fmtPct(item.agreement)}`;
   conf.className = "conf " + (item.confidence >= 0.66 ? "hi" : item.confidence >= 0.4 ? "mid" : "lo");
-  renderText(item);
-  document.getElementById("suggested").textContent = item.predicted_label;
+  if (labelType === "span") {
+    currentSpans = JSON.parse(item.predicted_label || "[]");
+    renderSpanText(item);
+    updateSpanSummary();
+  } else {
+    renderText(item);
+    document.getElementById("suggested").textContent = item.predicted_label;
+  }
   const rat = document.getElementById("rationale");
   rat.textContent = item.rationale; rat.hidden = true;
 
@@ -102,9 +200,15 @@ function render() {
   box.innerHTML = "";
   labels.forEach((lab, i) => {
     const b = document.createElement("button");
-    b.className = "label-btn" + (lab === item.predicted_label ? " suggested-btn" : "");
     b.innerHTML = `<span class="num">${i + 1}</span> ${lab}`;
-    b.onclick = () => decide(lab === item.predicted_label ? "accept" : "edit", lab);
+    if (labelType === "span") {
+      b.className = "label-btn ent-btn ent-" + (i % 6);
+      b.title = `Select text, then click (or press ${i + 1}) to mark it as ${lab}`;
+      b.onclick = () => addSpanFromSelection(i);
+    } else {
+      b.className = "label-btn" + (lab === item.predicted_label ? " suggested-btn" : "");
+      b.onclick = () => decide(lab === item.predicted_label ? "accept" : "edit", lab);
+    }
     box.appendChild(b);
   });
 }
@@ -208,6 +312,15 @@ document.addEventListener("keydown", (e) => {
   if (document.getElementById("reviewer").hidden) return;
   const item = queue[idx];
   if (!item) return;
+  if (labelType === "span") {
+    if (e.key === "Enter" || e.key.toLowerCase() === "a") { e.preventDefault(); submitSpans(); }
+    else if (e.key.toLowerCase() === "r") { decide("reject", null); }
+    else if (e.key.toLowerCase() === "e") { toggleExplain(); }
+    else if (e.key.toLowerCase() === "j") { if (idx < queue.length - 1) { idx++; render(); } }
+    else if (e.key.toLowerCase() === "k") { if (idx > 0) { idx--; render(); } }
+    else if (/^[1-9]$/.test(e.key)) { addSpanFromSelection(parseInt(e.key, 10) - 1); }
+    return;
+  }
   if (e.key === "Enter" || e.key.toLowerCase() === "a") { e.preventDefault(); decide("accept", item.predicted_label); }
   else if (e.key.toLowerCase() === "r") { decide("reject", null); }
   else if (e.key.toLowerCase() === "e") { toggleExplain(); }

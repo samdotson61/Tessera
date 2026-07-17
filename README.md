@@ -21,6 +21,9 @@ python -m tessera --db demo.db demo --target 0.95
 # Or the bundled A/B response-preference sample (pairwise labels):
 python -m tessera --db demo-pw.db demo --pairwise
 
+# Or the bundled entity-span (NER) sample — highlight/edit spans in the UI:
+python -m tessera --db demo-span.db demo --span
+
 # Then open the keyboard-first review UI for the items it routed to you:
 python -m tessera --db demo.db demo --serve     # http://127.0.0.1:8080
 
@@ -220,14 +223,15 @@ docs/               the full design suite (start at docs/README.md)
 
 ## Status & scope
 
-This is **Phase 0 plus most of Phase 1 (Trust)** of the roadmap in
+This is **Phase 0 plus Phase 1 (Trust)** of the roadmap in
 [`docs/08`](docs/08-implementation-and-development-plan.md): the end-to-end
-loop, the trust layer (calibration + CV + bootstrap CIs + LLM-as-judge + the
-CI regression gate), gold-set growth, two of the three beachhead label types
-(classification and pairwise/preference — span/NER not yet), and the flywheel
-data capture. Still open in Phase 1: span/NER, and a real-model
-coverage@precision number on a real partner dataset (the tooling is in
-`scripts/`; it needs an API key). Phases 2–4 (active-learning at scale,
+loop, the trust layer (calibration + CV + bootstrap CIs + LLM-as-judge +
+audit sampling + the CI regression gate), gold-set growth, and **all three
+beachhead label types** — classification, pairwise/preference, and span/NER
+(each producing a calibrated coverage@precision number, the Phase 1 exit
+criterion). Still open: a frontier-model coverage@precision number on a real
+partner dataset (the tooling is in `scripts/`; it needs an API key — local
+models measured free, see above). Phases 2–4 (active-learning at scale,
 per-customer model distillation, the cross-task "Composer" labeler) are
 designed in `docs/`, not yet built. See
 [`docs/09`](docs/09-risks-open-questions-and-glossary.md) for risks and open

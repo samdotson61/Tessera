@@ -25,8 +25,15 @@ def build_quality_report(storage, dataset_id, taxonomy, gate_result):
         y_pred.append(p.label)
         g_confs.append(p.confidence())
         g_correct.append(p.label == true_label)
-    prf = precision_recall_f1(y_true, y_pred, taxonomy.labels)
-    per_label = {k: round(v["precision"], 3) for k, v in prf["per_label"].items()}
+    if taxonomy.label_type == "span":
+        # Span-level precision per entity type (item-level exact match drives
+        # calibration; this is the finer-grained view a buyer reads).
+        from .engine.spans import corpus_per_type_precision
+        per_label = {k: round(v, 3) for k, v in corpus_per_type_precision(
+            list(zip(y_pred, y_true)), taxonomy.labels).items()}
+    else:
+        prf = precision_recall_f1(y_true, y_pred, taxonomy.labels)
+        per_label = {k: round(v["precision"], 3) for k, v in prf["per_label"].items()}
 
     caveats = []
     if gate_result.n_gold < 20:

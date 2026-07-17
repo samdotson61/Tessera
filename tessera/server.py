@@ -86,6 +86,7 @@ def make_handler(ctx: Context):
                 return self._json({
                     "dataset_id": ctx.dataset_id,
                     "taxonomy": {"name": ctx.taxonomy.name, "labels": ctx.taxonomy.labels,
+                                 "label_type": ctx.taxonomy.label_type,
                                  "definitions": ctx.taxonomy.definitions},
                     "counts": c,
                     "target_precision": ctx.settings.target_precision,

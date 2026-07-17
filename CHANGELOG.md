@@ -3,6 +3,32 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.6.0 — 2026-07-17
+
+Span/NER — the third beachhead label type. Phase 1's "three label types live"
+exit criterion is met.
+
+### Added
+- **Span annotations as first-class labels**: a span set serializes to one
+  canonical JSON string that flows through predictions, gold, finals, events,
+  audit, and exports unchanged. Confidence is whole-annotation voting — any
+  boundary/type disagreement between ensemble members or self-consistency
+  samples flattens the distribution and routes the item. Deterministic
+  validators (bounds, order, overlap, entity types) are the floor.
+- **LLM span labeling by exact quote** (models are unreliable with character
+  offsets): quotes are resolved to offsets locally; an unresolvable quote
+  fails the sample soft instead of shipping a guess.
+- **Quote-based gold authoring**: gold rows may give {text, type} instead of
+  offsets; the loader resolves them against the item text.
+- **Span review UI**: highlighted entities with type tags, click a span to
+  remove it, select text + number key (or type button) to add one, Enter
+  submits as accept or edit automatically. Verified live end-to-end.
+- **Stub lexicon NER** (offline demo): deterministic member boundary styles
+  (tight vs run-extended) make title/determiner cases disagree and route.
+  `demo --span`: 65% auto-labeled at 100% CV precision, 7/20 routed.
+- Per-entity-type span precision in the quality report; span regression
+  baseline in CI.
+
 ## 0.5.0 — 2026-07-17
 
 ### Added

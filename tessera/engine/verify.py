@@ -9,8 +9,23 @@ floor — see the correlated-error caveat in docs/04.
 from __future__ import annotations
 
 
-def deterministic_checks(label, taxonomy):
-    """Return a list of violation strings (empty = passes)."""
+def deterministic_checks(label, taxonomy, item=None):
+    """Return a list of violation strings (empty = passes).
+
+    For span taxonomies the label is a canonical span-set JSON; bounds, order,
+    overlap, and entity types are validated against the item text (an empty
+    span list is a legitimate annotation, not a violation).
+    """
+    if taxonomy.label_type == "span":
+        from . import spans as spans_mod
+        if label is None:
+            return ["empty label"]
+        try:
+            parsed = spans_mod.parse(label)
+        except (ValueError, KeyError, TypeError) as e:
+            return [f"unparsable span annotation: {e}"]
+        text = item.render() if item is not None else ""
+        return spans_mod.validate(parsed, text, set(taxonomy.labels)) if item is not None else []
     violations = []
     if not label:
         violations.append("empty label")

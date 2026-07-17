@@ -52,7 +52,12 @@ def load_items(path, dataset_id) -> list:
     return items
 
 
-def load_gold(path, dataset_id) -> list:
+def load_gold(path, dataset_id, items=None) -> list:
+    """Load gold rows. Classification/pairwise rows carry {id, label}; span rows
+    carry {id, spans: [...]} where each span is either {start, end, type} or a
+    quote {text, type} resolved against the item text (requires items)."""
+    from .engine import spans as spans_mod
+    by_id = {it.id: it for it in items} if items else {}
     gold = []
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -60,7 +65,24 @@ def load_gold(path, dataset_id) -> list:
             if not line:
                 continue
             d = json.loads(line)
-            gold.append(GoldItem(item_id=str(d["id"]), dataset_id=dataset_id, label=d["label"]))
+            if "spans" in d:
+                rows = d["spans"]
+                quoted = [s for s in rows if "start" not in s]
+                offset = [s for s in rows if "start" in s]
+                if quoted:
+                    it = by_id.get(str(d["id"]))
+                    if it is None:
+                        raise ValueError(f"gold row {d['id']} quotes span text but the "
+                                         "item is not loaded; pass items to load_gold")
+                    resolved, unresolved = spans_mod.resolve_quoted(quoted, it.text)
+                    if unresolved:
+                        raise ValueError(f"gold row {d['id']}: quote(s) not found in "
+                                         f"item text: {unresolved}")
+                    offset.extend(resolved)
+                label = spans_mod.canonical(offset)
+            else:
+                label = d["label"]
+            gold.append(GoldItem(item_id=str(d["id"]), dataset_id=dataset_id, label=label))
     return gold
 
 
@@ -93,6 +115,11 @@ def bootstrap_demo(storage, settings, dataset_id="demo", target_precision=None,
         items = load_items(os.path.join(sd, "pairwise.jsonl"), dataset_id)
         gold = load_gold(os.path.join(sd, "pairwise_gold.jsonl"), dataset_id)
         name = "Response preference (sample)"
+    elif sample == "span":
+        taxonomy = load_taxonomy(os.path.join(sd, "span_taxonomy.json"))
+        items = load_items(os.path.join(sd, "span.jsonl"), dataset_id)
+        gold = load_gold(os.path.join(sd, "span_gold.jsonl"), dataset_id, items=items)
+        name = "Entity spans (sample)"
     else:
         taxonomy = load_taxonomy(os.path.join(sd, "taxonomy.json"))
         items = load_items(os.path.join(sd, "intents.jsonl"), dataset_id)

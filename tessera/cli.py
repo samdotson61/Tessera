@@ -53,9 +53,10 @@ def cmd_demo(args):
     settings = Settings.from_env()
     settings.db_path = args.db
     storage = Storage(settings.db_path)
+    sample = "pairwise" if args.pairwise else ("span" if args.span else "intents")
     taxonomy, gate = appmod.bootstrap_demo(storage, settings,
                                             target_precision=args.target,
-                                            sample="pairwise" if args.pairwise else "intents")
+                                            sample=sample)
     _print_summary(gate, taxonomy)
     report = build_quality_report(storage, "demo", taxonomy, gate)
     print("\n=== quality report ===")
@@ -73,7 +74,7 @@ def cmd_label(args):
     storage = Storage(settings.db_path)
     taxonomy = appmod.load_taxonomy(args.taxonomy)
     items = appmod.load_items(args.data, args.dataset)
-    gold = appmod.load_gold(args.gold, args.dataset) if args.gold else None
+    gold = appmod.load_gold(args.gold, args.dataset, items=items) if args.gold else None
     appmod.ingest(storage, args.dataset, args.dataset, items, taxonomy, gold)
     gate = appmod.run_full(storage, args.dataset, taxonomy, settings)
     _print_summary(gate, taxonomy)
@@ -140,6 +141,8 @@ def build_parser():
     d.add_argument("--serve", action="store_true", help="open the review UI afterwards")
     d.add_argument("--pairwise", action="store_true",
                    help="use the bundled A/B response-preference sample instead of intents")
+    d.add_argument("--span", action="store_true",
+                   help="use the bundled entity-span (NER) sample instead of intents")
     d.set_defaults(func=cmd_demo)
 
     l = sub.add_parser("label", help="ingest a dataset + taxonomy and run the loop")

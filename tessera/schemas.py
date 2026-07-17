@@ -74,6 +74,20 @@ class Taxonomy:
         return list(self.labels)
 
     def to_prompt(self) -> str:
+        if self.label_type == LabelType.SPAN.value:
+            lines = [
+                "Task: extract every entity span from the text below.",
+                f"Guidelines: {self.guidelines}".rstrip(),
+                "Entity types:",
+            ]
+            for lab in self.labels:
+                d = self.definitions.get(lab, "")
+                lines.append(f"- {lab}: {d}" if d else f"- {lab}")
+            lines.append('For each entity quote its EXACT text as it appears. Respond ONLY as '
+                         'JSON: {"spans": [{"text": <exact quote>, "type": <one type>}, ...], '
+                         '"confidence": <0..1>, "rationale": <short>}. '
+                         'Use an empty spans list when the text contains no entities.')
+            return "\n".join(lines)
         if self.label_type == LabelType.PAIRWISE.value:
             task = ("Task: compare the two candidate responses (A and B) to the prompt "
                     "below and pick the better one according to the guidelines.")

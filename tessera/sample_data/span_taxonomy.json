@@ -1,0 +1,13 @@
+{
+  "id": "news-entities",
+  "name": "News entity spans",
+  "version": 1,
+  "label_type": "span",
+  "labels": ["person", "org", "location"],
+  "definitions": {
+    "person": "garcia chen mueller tanaka johnson okafor reyes lindqvist",
+    "org": "acme globex initech steelworks council ministry consortium labs",
+    "location": "springfield rivertown lakeside karachi oslo vostok geneva"
+  },
+  "guidelines": "Mark every person, organization, and location mentioned in the snippet. Mark the entity name itself — not titles (President, Dr.), determiners (The), or role words around it. A company keeps its full registered name; a person keeps given + family name when both appear."
+}

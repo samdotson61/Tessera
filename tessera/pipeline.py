@@ -21,7 +21,7 @@ from .engine.gating import apply_gate
 def _predict_item(it, dataset_id, taxonomy, labelers):
     outputs = [lab.label(it, taxonomy) for lab in labelers]
     label, raw, agreement, votes, dist = conf_mod.ensemble(outputs)
-    violations = deterministic_checks(label, taxonomy)
+    violations = deterministic_checks(label, taxonomy, item=it)
     rationale = outputs[0].rationale if outputs else ""
     if violations:
         # A failed rubric check forces the item to a human regardless of model confidence.

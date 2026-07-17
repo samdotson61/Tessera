@@ -53,6 +53,8 @@ class KeywordStubLabeler(Labeler):
         self.model_id = model_id
 
     def label(self, item: Item, taxonomy: Taxonomy) -> LabelOutput:
+        if taxonomy.label_type == "span":
+            return self._label_span(item, taxonomy)
         if taxonomy.label_type == "pairwise" and item.is_pairwise():
             return self._label_pairwise(item, taxonomy)
         kw = _keywords_for(taxonomy)
@@ -68,6 +70,45 @@ class KeywordStubLabeler(Labeler):
         hit_words = ", ".join(sorted(matched.get(best, []))) if best else ""
         rationale = f"matched: {hit_words}" if hit_words else "no strong keywords (ambiguous)"
         return LabelOutput(model_id=self.model_id, distribution=dist, rationale=rationale)
+
+    def _label_span(self, item: Item, taxonomy: Taxonomy) -> LabelOutput:
+        """Lexicon NER: each entity type's definition doubles as its lexicon.
+        A capitalized run containing a lexicon word becomes a span of that type.
+        Members differ deterministically on boundaries: the higher-temperature
+        member extends a span across the whole capitalized run, the other keeps
+        the lexicon words only — so runs with extra capitalized words (titles,
+        determiners: the genuinely ambiguous boundary cases) always produce
+        ensemble disagreement and route to a human.
+        """
+        from ..engine import spans as spans_mod
+        text = item.text
+        lex = {lab: {w.lower() for w in _tokens(taxonomy.definitions.get(lab, ""))}
+               for lab in taxonomy.labels}
+        extend = self.temperature >= 0.7
+        spans = []
+        for m in re.finditer(r"[A-Z][\w'-]*(?:\s+[A-Z][\w'-]*)*", text):
+            run, start = m.group(), m.start()
+            words = run.split()
+            hits = [(i, w) for i, w in enumerate(words)
+                    for lab in taxonomy.labels if w.lower().strip("'-") in lex[lab]]
+            if not hits:
+                continue
+            lab = next(l for l in taxonomy.labels
+                       if hits[0][1].lower().strip("'-") in lex[l])
+            if extend or len(words) == len({i for i, _ in hits}):
+                a, b = start, start + len(run)
+            else:                       # lexicon words only: tightest boundary
+                first = min(i for i, _ in hits)
+                last = max(i for i, _ in hits)
+                a = start + sum(len(w) + 1 for w in words[:first])
+                b = start + sum(len(w) + 1 for w in words[:last + 1]) - 1
+            spans.append({"start": a, "end": b, "type": lab})
+        annotation = spans_mod.canonical(spans)
+        n = len(spans)
+        rationale = (f"lexicon spans: {n} ({'run-extended' if extend else 'tight'} boundaries)"
+                     if n else "no lexicon entities found")
+        return LabelOutput(model_id=self.model_id, distribution={annotation: 1.0},
+                           rationale=rationale)
 
     def _label_pairwise(self, item: Item, taxonomy: Taxonomy) -> LabelOutput:
         """Score each response by keyword overlap with the guidelines; the labels
