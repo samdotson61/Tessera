@@ -118,6 +118,7 @@ backoff, and a concurrent labeling pool.
 | `TESSERA_CACHE` | `tessera_cache.db` | LLM response cache; `none` disables |
 | `TESSERA_WORKERS` | `8` | concurrent items in the labeling pass |
 | `TESSERA_FEWSHOT` | `0` | k nearest gold examples shown in the prompt (RAG-lite, classification) |
+| `TESSERA_FEWSHOT_STATIC` | `0` | one fixed example block for all items (measured: not recommended) |
 | `TESSERA_LOGPROBS` | `0` | logprob-head classification: 1 call/item, token-probability confidence (openai-shaped local servers) |
 | `TESSERA_JUDGE` | off | LLM-as-judge provider — use a *different family* than the labeler |
 | `TESSERA_JUDGE_MODEL` | per provider | judge model override |
@@ -181,10 +182,26 @@ label as one word and reads the answer token's top-logprobs as the label
 distribution — one call per item. It beat 5-vote self-consistency on every
 axis at once: 3× faster, +17pts coverage, +2pts true precision. Verbalized
 confidence is the model's *opinion about* its answer; the token distribution
-*is* the answer's uncertainty. Adding 4-shot gold retrieval on top trades
-+14pts more coverage for ~−2pts precision — the right call at a 90% target,
-the wrong one at 95%. The local 4B with a logprob head also *beats Haiku
-4.5's verbalized confidence* on this task at both targets.
+*is* the answer's uncertainty. The local 4B with a logprob head also *beats
+Haiku 4.5's verbalized confidence* on this task at both targets.
+
+**The honest configuration (v0.9.0, 297 gold):** with gold at scale the gate
+stops over-promising — 95% is correctly *refused* (this model's best band is
+~94% on this data; the earlier 64%@95% was under-sampled-gold optimism), and
+at a **90% target it delivers 64% coverage at 94.1% TRUE (97.2% on unseen
+items)** — a conservative promise kept with margin. At 85%: 99.2% coverage.
+Grow gold until the estimate stops moving; then the dial trades coverage for
+precision truthfully across its whole range.
+
+Measured and retired (the harness arbitrates): the cross-family local
+ensemble (identical quality at 1.5× cost), static few-shot (coverage
+regression, and its speed rationale is void — cross-item partial-prefix KV
+reuse does not currently function on llama-server's chat endpoint), and the
+2B/9B for quality/low-end respectively (2B = economy tier: 33.5%@90-target;
+9B projected ~20s/item on X1-class CPUs). A stdlib Tier-0 specialist +
+cascade (`scripts/cascade.py`) ships for organization-scale corpora — it
+trains in <1s and gates honestly (train/calibrate split), and earns its keep
+once flywheel corrections reach the thousands.
 
 The frontier comparison (2026-07-17) added three more lessons:
 

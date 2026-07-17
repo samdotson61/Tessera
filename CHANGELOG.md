@@ -45,7 +45,6 @@ specialist, and three retirements the harness ordered.
   carried the cascade at champion numbers (64.2% @ 94.2% true).
 
 ## 0.8.0 — 2026-07-17
-## 0.8.0 — 2026-07-17
 
 Speed AND accuracy: the logprob head + gold few-shot, measured head-to-head.
 
