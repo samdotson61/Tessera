@@ -115,6 +115,7 @@ class Prediction:
     distribution: dict = field(default_factory=dict)  # ensemble label -> prob
     auto_applied: Optional[bool] = None
     routed: Optional[bool] = None
+    audit: bool = False    # auto-applied AND selected for human audit (label ships, human verifies)
     source: str = ""
 
     def confidence(self) -> float:
@@ -171,6 +172,7 @@ class GateResult:
     ece_after: float = 0.0
     cross_validated: bool = False   # True if achieved/ece are out-of-sample (CV)
     n_judge_vetoed: int = 0         # auto-apply candidates the LLM judge routed to a human
+    n_audit_pending: int = 0        # auto-applied items awaiting human audit
     coverage_ci: Optional[list] = None   # [lo, hi] bootstrap 95% CI on gold coverage
 
 
@@ -190,6 +192,9 @@ class QualityReport:
     ece: float = 0.0
     coverage_ci: Optional[list] = None    # [lo, hi] bootstrap 95% CI on gold coverage
     reliability_bins: list = field(default_factory=list)  # calibrated conf vs accuracy per bin
+    n_audit_pending: int = 0              # auto-applied items awaiting audit review
+    n_audited: int = 0                    # audit reviews completed
+    audit_precision: Optional[float] = None   # share of audited labels the human confirmed
     caveats: list = field(default_factory=list)
     generated_at: str = field(default_factory=now_iso)
 

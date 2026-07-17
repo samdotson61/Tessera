@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from .schemas import QualityReport
 from .engine.metrics import precision_recall_f1, reliability_bins
+from .flywheel import audit_stats
 
 
 def build_quality_report(storage, dataset_id, taxonomy, gate_result):
@@ -35,6 +36,18 @@ def build_quality_report(storage, dataset_id, taxonomy, gate_result):
         caveats.append("No items met the precision target; everything was routed to humans. "
                        "Lower the target, improve the rubric, or add gold.")
     caveats.append("Rare classes and out-of-distribution items are never auto-applied without audit.")
+    audit = audit_stats(storage, dataset_id)
+    n_audit_pending = sum(1 for p in preds if p.audit)
+    if audit["n_audited"]:
+        line = (f"Audit sample: {audit['n_confirmed']}/{audit['n_audited']} shipped labels "
+                f"confirmed ({audit['audit_precision']:.1%}) — the production check of the SLA.")
+        if audit["audit_precision"] < gate_result.target_precision:
+            line += (" BELOW the target: auto-region errors are real; overturned labels have "
+                     "entered gold — re-gate, and consider a stricter target or better rubric.")
+        caveats.append(line)
+    elif n_audit_pending:
+        caveats.append(f"{n_audit_pending} auto-applied item(s) await audit review; the SLA is "
+                       "unverified in production until the audit sample is worked.")
     n_human_gold = storage.count_gold_by_source(dataset_id).get("human", 0)
     if n_human_gold:
         caveats.append(f"{n_human_gold} gold item(s) were grown from human review decisions; "
@@ -62,4 +75,7 @@ def build_quality_report(storage, dataset_id, taxonomy, gate_result):
         coverage_ci=([round(v, 4) for v in gate_result.coverage_ci]
                      if gate_result.coverage_ci else None),
         reliability_bins=reliability_bins(g_confs, g_correct),
+        n_audit_pending=n_audit_pending, n_audited=audit["n_audited"],
+        audit_precision=(round(audit["audit_precision"], 4)
+                         if audit["audit_precision"] is not None else None),
         caveats=caveats)

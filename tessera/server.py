@@ -35,10 +35,10 @@ class Context:
 def _queue_payload(ctx):
     preds = ctx.storage.get_predictions(ctx.dataset_id)
     items = {it.id: it for it in ctx.storage.get_items(ctx.dataset_id)}
-    out = []
-    for p in order_queue(preds):
+
+    def entry(p, is_audit):
         it = items.get(p.item_id)
-        out.append({
+        return {
             "item_id": p.item_id,
             "text": it.text if it else "",
             "meta": it.meta if it else {},
@@ -46,9 +46,16 @@ def _queue_payload(ctx):
             "confidence": round(p.confidence(), 4),
             "agreement": round(p.agreement, 3),
             "rationale": p.rationale,
+            "audit": is_audit,
             "distribution": {k: round(v, 4) for k, v in sorted(
                 p.distribution.items(), key=lambda kv: kv[1], reverse=True)},
-        })
+        }
+
+    out = [entry(p, False) for p in order_queue(preds)]
+    # Audit items follow the routed queue: their labels already shipped, so
+    # verification is second in priority to items with no label at all.
+    out.extend(entry(p, True) for p in sorted(
+        (p for p in preds if p.audit), key=lambda p: p.item_id))
     return out
 
 

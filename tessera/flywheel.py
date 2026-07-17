@@ -20,6 +20,19 @@ def export_training_pairs(storage, dataset_id):
     return pairs
 
 
+def audit_stats(storage, dataset_id):
+    """Completed audit reviews: how often the human confirmed the shipped label.
+
+    audit_precision is the production check of the SLA — measured on a random
+    sample of the auto-applied set, not on gold the calibrator has seen.
+    """
+    events = [e for e in storage.get_events(dataset_id)
+              if e.routed_to_human and e.route_reason == "audit"]
+    confirmed = sum(1 for e in events if e.human_action == "accept")
+    return {"n_audited": len(events), "n_confirmed": confirmed,
+            "audit_precision": (confirmed / len(events)) if events else None}
+
+
 def event_stats(storage, dataset_id):
     """Counts of how items were resolved — the raw material for 'effort dropping'."""
     events = storage.get_events(dataset_id)

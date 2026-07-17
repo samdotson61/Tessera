@@ -40,6 +40,8 @@ def main():
     ap.add_argument("--rounds", type=int, default=5)
     ap.add_argument("--batch", type=int, default=50)
     ap.add_argument("--target", type=float, default=0.95)
+    ap.add_argument("--audit-rate", type=float, default=0.0,
+                    help="audit share of the auto set (0 = queue-only baseline)")
     args = ap.parse_args()
 
     truth = {}
@@ -50,15 +52,17 @@ def main():
                 truth[str(d["id"])] = d["label"]
 
     storage = Storage(args.db)
-    settings = Settings(db_path=args.db, target_precision=args.target)
+    settings = Settings(db_path=args.db, target_precision=args.target,
+                        audit_rate=args.audit_rate)
     preds = storage.get_predictions(args.dataset)
     taxonomy = storage.get_taxonomy(preds[0].taxonomy_id)
 
     reviewed = set()
     print(f"oracle reviewer on '{args.dataset}': {len(preds)} items, "
-          f"{args.rounds} rounds x {args.batch} reviews, target {args.target:.0%}")
+          f"{args.rounds} rounds x {args.batch} reviews, target {args.target:.0%}, "
+          f"audit rate {args.audit_rate:.0%}")
     print(f"{'round':>5} {'gold':>5} {'thresh':>7} {'coverage':>9} {'cv_prec':>8} "
-          f"{'true_auto':>10} {'true_nongold':>13} {'reviews':>8}")
+          f"{'true_auto':>10} {'true_nongold':>13} {'audit':>6} {'reviews':>8}")
 
     for rnd in range(args.rounds + 1):
         gate = calibrate_and_gate(storage, args.dataset, taxonomy, args.target, settings)
@@ -69,10 +73,13 @@ def main():
         t_non, n_non = true_precision(auto, truth, exclude=gold_ids)
         print(f"{rnd:>5} {gate.n_gold:>5} {gate.threshold:>7.3f} {gate.coverage:>9.1%} "
               f"{gate.achieved_precision:>8.1%} {t_all:>10.1%} "
-              f"{t_non:>12.1%}({n_non:>3}) {len(reviewed):>8}")
+              f"{t_non:>12.1%}({n_non:>3}) {gate.n_audit_pending:>6} {len(reviewed):>8}")
         if rnd == args.rounds:
             break
-        queue = [p for p in order_queue(preds) if p.item_id not in reviewed]
+        # Audit items first (they verify shipped labels — the SLA check), then
+        # the routed queue in router order.
+        audits = sorted((p for p in preds if p.audit), key=lambda p: p.item_id)
+        queue = audits + [p for p in order_queue(preds) if p.item_id not in reviewed]
         for p in queue[:args.batch]:
             want = truth.get(p.item_id)
             if want is None:

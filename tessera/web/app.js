@@ -22,7 +22,8 @@ async function refreshState() {
   labels = s.taxonomy.labels;
   const c = s.counts;
   document.getElementById("stats").textContent =
-    `${c.items} items · ${c.auto_applied} auto · ${c.queued} queued · ${c.finalized} finalized`;
+    `${c.items} items · ${c.auto_applied} auto · ${c.queued} queued · ${c.finalized} finalized` +
+    (c.audit_pending ? ` · ${c.audit_pending} audit` : "");
   if (s.gate) {
     document.getElementById("coverage").innerHTML =
       `Auto-labeled <b>${s.gate.n_auto}</b> (<b>${fmtPct(s.gate.coverage)}</b> of dataset) ` +
@@ -80,7 +81,15 @@ function render() {
   }
   empty.hidden = true; reviewer.hidden = false;
   const item = queue[idx];
-  document.getElementById("progress").textContent = `Item ${idx + 1} / ${queue.length}`;
+  const prog = document.getElementById("progress");
+  prog.textContent = `Item ${idx + 1} / ${queue.length}`;
+  if (item.audit) {
+    const b = document.createElement("span");
+    b.className = "audit-tag";
+    b.title = "This label was auto-applied; you are verifying it (accept confirms, a pick overturns).";
+    b.textContent = "AUDIT — label shipped, verify it";
+    prog.appendChild(b);
+  }
   const conf = document.getElementById("conf");
   conf.textContent = `confidence ${fmtPct(item.confidence)} · agreement ${fmtPct(item.agreement)}`;
   conf.className = "conf " + (item.confidence >= 0.66 ? "hi" : item.confidence >= 0.4 ? "mid" : "lo");

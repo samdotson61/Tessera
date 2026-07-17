@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS taxonomies (
 CREATE TABLE IF NOT EXISTS predictions (
     item_id TEXT PRIMARY KEY, dataset_id TEXT, taxonomy_id TEXT, label TEXT,
     confidence_raw REAL, confidence_calibrated REAL, agreement REAL, rationale TEXT,
-    votes_json TEXT, distribution_json TEXT, auto_applied INTEGER, routed INTEGER, source TEXT
+    votes_json TEXT, distribution_json TEXT, auto_applied INTEGER, routed INTEGER, source TEXT,
+    audit INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS gold (
     item_id TEXT PRIMARY KEY, dataset_id TEXT, label TEXT, source TEXT DEFAULT 'seed'
@@ -64,6 +65,10 @@ class Storage:
             self.conn.executescript(SCHEMA)
             try:  # migrate pre-source gold tables in place
                 self.conn.execute("ALTER TABLE gold ADD COLUMN source TEXT DEFAULT 'seed'")
+            except sqlite3.OperationalError:
+                pass
+            try:  # migrate pre-audit prediction tables in place
+                self.conn.execute("ALTER TABLE predictions ADD COLUMN audit INTEGER DEFAULT 0")
             except sqlite3.OperationalError:
                 pass
             self.conn.commit()
@@ -129,10 +134,11 @@ class Storage:
     def upsert_prediction(self, p: Prediction):
         with self._lock:
             self.conn.execute(
-                "INSERT OR REPLACE INTO predictions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO predictions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (p.item_id, p.dataset_id, p.taxonomy_id, p.label, p.confidence_raw,
                  p.confidence_calibrated, p.agreement, p.rationale, json.dumps(p.votes),
-                 json.dumps(p.distribution), _b(p.auto_applied), _b(p.routed), p.source))
+                 json.dumps(p.distribution), _b(p.auto_applied), _b(p.routed), p.source,
+                 int(p.audit)))
             self.conn.commit()
 
     def get_predictions(self, dataset_id):
@@ -152,7 +158,8 @@ class Storage:
             rationale=r["rationale"], votes=json.loads(r["votes_json"] or "{}"),
             distribution=json.loads(r["distribution_json"] or "{}"),
             auto_applied=(None if r["auto_applied"] is None else bool(r["auto_applied"])),
-            routed=(None if r["routed"] is None else bool(r["routed"])), source=r["source"])
+            routed=(None if r["routed"] is None else bool(r["routed"])), source=r["source"],
+            audit=bool(r["audit"]))
 
     # ---- gold ----
     def add_gold(self, gold_items):
@@ -257,6 +264,7 @@ class Storage:
             "gold": q("SELECT COUNT(*) FROM gold WHERE dataset_id=?"),
             "auto_applied": q("SELECT COUNT(*) FROM predictions WHERE dataset_id=? AND auto_applied=1"),
             "queued": q("SELECT COUNT(*) FROM predictions WHERE dataset_id=? AND routed=1"),
+            "audit_pending": q("SELECT COUNT(*) FROM predictions WHERE dataset_id=? AND audit=1"),
             "events": q("SELECT COUNT(*) FROM events WHERE dataset_id=?"),
             "finalized": q("SELECT COUNT(*) FROM items WHERE dataset_id=? AND final_label IS NOT NULL"),
         }

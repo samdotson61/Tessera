@@ -115,6 +115,7 @@ backoff, and a concurrent labeling pool.
 | `TESSERA_JUDGE` | off | LLM-as-judge provider — use a *different family* than the labeler |
 | `TESSERA_JUDGE_MODEL` | per provider | judge model override |
 | `TESSERA_GROW_GOLD` | `1` | record review accepts/edits as gold (source `human`) |
+| `TESSERA_AUDIT_RATE` | `0.02` | share of auto-applied items also routed for human audit |
 
 ## Run it on a real dataset
 
@@ -172,12 +173,17 @@ Three honest lessons, straight from the trust layer:
    ~90–94% true precision on the auto-applied set — the 0–85% bootstrap
    coverage CI at 120 gold items said up front that the CV estimate couldn't
    be trusted to the point.
-3. **Review-queue gold can't police the auto region.** An oracle-reviewer
-   simulation (`scripts/simulate_review.py`) worked the entire routed queue —
-   and coverage never moved, because the errors that matter are *above* the
-   threshold, where the reviewer never looks. This is why docs/04's ~2% audit
-   sample is load-bearing, not optional: it is the only channel that feeds
-   auto-region errors back into calibration.
+3. **Review-queue gold can't police the auto region — audit sampling does.**
+   An oracle-reviewer simulation (`scripts/simulate_review.py`) worked the
+   entire routed queue and coverage never moved: the errors that matter are
+   *above* the threshold, where the reviewer never looks. With **audit
+   sampling** built (a deterministic slice of auto-applied items is verified
+   by a human — the label still ships, the verdict feeds gold), one audit
+   round at 15% collapsed the estimate–truth gap from 5.7 to 1.3 points
+   (CV 98.2%→95.9% vs true 92.5%→94.6%), re-priced coverage honestly
+   (46.8%→36.8%), and lifted unseen true precision 90.1%→93.9%. The audit
+   verdict stream is also the production SLA check (`audit_precision` in the
+   quality report).
 
 Footprint note: labeling prompts are ~500-700 tokens end-to-end, so a tiny
 context window is all a labeling endpoint needs. With winc.cpp ≥ v1.26.0, set

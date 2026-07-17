@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .schemas import Prediction, Event, GateResult, GoldItem, HumanAction
 from .engine import confidence as conf_mod
+from .engine.audit import audit_pick
 from .engine.verify import deterministic_checks
 from .engine.calibration import fit_calibrator, cross_val_metrics
 from .engine.metrics import coverage_at_precision, ece, bootstrap_coverage_ci
@@ -129,14 +130,33 @@ def calibrate_and_gate(storage, dataset_id, taxonomy, target_precision, settings
 
     # Items resolved by a human keep their final label; anything else that is now
     # routed must not stay finalized from a previous, looser gate.
-    human_resolved = {e.item_id for e in storage.get_events(dataset_id)
+    events = storage.get_events(dataset_id)
+    human_resolved = {e.item_id for e in events
                       if e.routed_to_human and e.final_label is not None}
+    already_audited = {e.item_id for e in events
+                       if e.routed_to_human and e.route_reason == "audit"}
+
+    # Audit sampling (docs/04): a deterministic ~audit_rate slice of the auto
+    # set is ALSO routed for human verification. The label still ships —
+    # coverage is unchanged — but the verdict checks the SLA in production and
+    # feeds auto-region errors into gold, the one region queue review never sees.
+    n_audit = 0
+    audit_rate = getattr(settings, "audit_rate", 0.0)
+    for p in preds:
+        p.audit = bool(p.auto_applied and audit_rate > 0
+                       and p.item_id not in already_audited
+                       and p.item_id not in human_resolved
+                       and audit_pick(dataset_id, p.item_id, audit_rate))
+        if p.audit:
+            n_audit += 1
+
     if log_events:
         storage.delete_auto_events(dataset_id)  # idempotent: replace prior auto events
     for p in preds:
         storage.upsert_prediction(p)
         if p.auto_applied:
-            storage.set_final_label(p.item_id, p.label)
+            if p.item_id not in human_resolved:   # an audit edit outranks the model label
+                storage.set_final_label(p.item_id, p.label)
             if log_events:
                 storage.append_event(_event_for(p, taxonomy, routed=False))
         elif p.routed and p.item_id not in human_resolved:
@@ -147,10 +167,10 @@ def calibrate_and_gate(storage, dataset_id, taxonomy, target_precision, settings
         achieved_precision=achieved, n_auto=n_auto, n_queue=n_queue,
         n_gold=len(cal_confs), ece_before=ece_before, ece_after=ece_after,
         cross_validated=cross_validated, n_judge_vetoed=n_vetoed,
-        coverage_ci=(list(ci) if ci else None))
+        n_audit_pending=n_audit, coverage_ci=(list(ci) if ci else None))
 
 
-def _event_for(p, taxonomy, routed, human_action=None, final_label="__model__"):
+def _event_for(p, taxonomy, routed, human_action=None, final_label="__model__", reason=None):
     if final_label == "__model__":
         final_label = p.label if not routed else None
     return Event(
@@ -158,7 +178,7 @@ def _event_for(p, taxonomy, routed, human_action=None, final_label="__model__"):
         model_label=p.label, model_rationale=p.rationale,
         confidence_raw=p.confidence_raw, confidence_calibrated=p.confidence_calibrated,
         ensemble_votes=p.votes, routed_to_human=routed,
-        route_reason=("low_confidence" if routed else ""),
+        route_reason=(reason or ("low_confidence" if routed else "")),
         human_action=human_action, final_label=final_label,
         taxonomy_version=taxonomy.version, rubric_snapshot=taxonomy.guidelines[:200])
 
@@ -175,9 +195,19 @@ def undo_last_human_action(storage, dataset_id):
         return None
     storage.delete_event(e.id)
     storage.remove_gold(e.item_id, source="human")
+    p = storage.get_prediction(e.item_id)
+    if e.route_reason == "audit":
+        # The item was auto-applied; the audit verdict is undone, so the model
+        # label ships again and the item returns to the audit queue.
+        storage.set_final_label(e.item_id, p.label if p else None)
+        if p is not None:
+            p.audit = True
+            p.auto_applied = True
+            p.routed = False
+            storage.upsert_prediction(p)
+        return e.item_id
     remaining = storage.get_human_events_for_item(e.item_id)
     storage.set_final_label(e.item_id, remaining[-1].final_label if remaining else None)
-    p = storage.get_prediction(e.item_id)
     if p is not None:
         p.routed = True
         p.auto_applied = False
@@ -192,10 +222,16 @@ def record_human_action(storage, taxonomy, item_id, action, label=None, annotato
     grow_gold=True also records the accepted/edited label as gold (source
     "human") — docs/04's gold-set growth, so calibration tightens run over run.
     Seed gold rows are never overwritten by grown ones.
+
+    Audit items (auto-applied, flagged for verification) take the same actions:
+    accept confirms the shipped label, edit overturns it (and the correction
+    enters gold — the auto-region ground-truth injection), reject clears the
+    label and demotes the item to the ordinary review queue.
     """
     p = storage.get_prediction(item_id)
     if p is None:
         raise ValueError(f"no prediction for item {item_id}")
+    was_audit = bool(p.audit) and not p.routed
     if action == HumanAction.ACCEPT.value:
         final = p.label
     elif action == HumanAction.EDIT.value:
@@ -210,9 +246,18 @@ def record_human_action(storage, taxonomy, item_id, action, label=None, annotato
         if grow_gold and item_id not in storage.get_gold(p.dataset_id):
             storage.add_gold([GoldItem(item_id=item_id, dataset_id=p.dataset_id,
                                        label=final, source="human")])
-    e = _event_for(p, taxonomy, routed=True, human_action=action, final_label=final)
+    e = _event_for(p, taxonomy, routed=True, human_action=action, final_label=final,
+                   reason="audit" if was_audit else None)
     e.annotator_id = annotator
     storage.append_event(e)
-    p.routed = False  # resolved; leaves the queue
+    p.audit = False
+    if was_audit and action == HumanAction.REJECT.value:
+        # The human says the shipped label is wrong and offers no replacement:
+        # un-ship it and send the item through the ordinary review queue.
+        storage.set_final_label(item_id, None)
+        p.auto_applied = False
+        p.routed = True
+    else:
+        p.routed = False  # resolved; leaves the queue
     storage.upsert_prediction(p)
     return final

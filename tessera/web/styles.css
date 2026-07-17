@@ -53,3 +53,4 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
 .rel-dot { fill: var(--accent); fill-opacity: .75; }
 .rel-tick { fill: var(--muted); font-size: 10px; }
 .rel-label { fill: var(--muted); font-size: 11px; }
+.audit-tag { margin-left: 8px; color: var(--mid); border: 1px solid var(--mid); border-radius: 4px; padding: 0 6px; font-size: 11px; }

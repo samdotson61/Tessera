@@ -3,6 +3,30 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.5.0 — 2026-07-17
+
+### Added
+- **Audit sampling** (docs/04 Layer 5, `TESSERA_AUDIT_RATE`, default 2%): a
+  deterministic slice of AUTO-APPLIED items is also routed to the human. The
+  label still ships (coverage unchanged); the verdict verifies the SLA in
+  production (`audit_precision` on the quality report) and feeds auto-region
+  errors into gold — the one channel queue review cannot provide. Accept
+  confirms the shipped label, edit overturns it (correction enters gold),
+  reject un-ships it and routes the item; undo restores the pending audit.
+  Selection is hash-stable per item: re-gates keep the same audit set and
+  reviewed items are never re-audited. UI: AUDIT badge in the queue, audit
+  count in the header, audit line in the report caveats.
+- `scripts/simulate_review.py --audit-rate` for measuring the effect.
+
+### Measured (oracle sim on the local Qwen3.5-4B run, 15% audit)
+- One audit round collapsed the estimate–truth gap from 5.7 to 1.3 points
+  (CV 98.2%→95.9% vs true 92.5%→94.6%), re-priced coverage honestly
+  (46.8%→36.8%), and lifted unseen true precision 90.1%→93.9%.
+
+### Fixed
+- A re-gate no longer overwrites a human's audit correction with the model
+  label (human-resolved finals are preserved on auto-applied items).
+
 ## 0.4.0 — 2026-07-14
 
 ### Added
