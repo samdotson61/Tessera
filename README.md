@@ -164,12 +164,32 @@ python -m tessera --db agnews.db label --data data/agnews/items.jsonl \
 greedy serve (single sample) and one on a sampling serve (5-vote
 self-consistency):
 
-| run | distinct conf values | coverage | CV estimate | true (all auto) | true (unseen) |
+| run | target | coverage | CV estimate | true (all auto) | true (unseen) |
 |---|---|---|---|---|---|
-| greedy, 1 sample | 5 | 27.5% | 97.0% | 93.6% | 92.2% |
-| sampled, 5 votes | 48 | **46.8%** | 98.2% | 92.5% | 90.1% |
+| Qwen3.5-4B greedy, 1 sample | 95% | 27.5% | 97.0% | 93.6% | 92.2% |
+| Qwen3.5-4B sampled, 5 votes | 95% | 46.8% | 98.2% | 92.5% | 90.1% |
+| **Claude Haiku 4.5**, 5 votes (~$1.30) | 95% | **0.0%** | — | — | — |
+| Claude Haiku 4.5, 5 votes | 90% | **89.0%** | 92.9% | 88.8% | 87.2% |
 
-Three honest lessons, straight from the trust layer:
+The frontier comparison (2026-07-17) added three more lessons:
+
+- **Both models sit at the dataset's ceiling, not their own** — Haiku's true
+  accuracy over all 400 items is 84% vs the local 4B's ~85%. AG News
+  reference labels are noisy at the world/business/scitech boundaries; no
+  labeler can beat a corpus's own label quality.
+- **Haiku's zero at 95% is the gate being honest.** Its gold errors sit
+  inside the top confidence bands, so cross-validation correctly concludes no
+  threshold can promise 95% — refusing all coverage. (The 4B *claimed* 95%
+  and truthed at 92.5%: the less honest outcome, invisibly.) At a defensible
+  90% target Haiku auto-labels 89% of the dataset — ~2x the 4B's coverage,
+  ~4 points less precise: diffuse verbalized confidence buys reach, not
+  separation.
+- **Gold provenance is load-bearing.** This gold was inherited corpus labels
+  (noise included); in the SMS dogfood below, hand-curated gold produced a
+  much better-behaved loop. Rubric and gold quality (docs/09 R3/R4) beat
+  model choice.
+
+Three honest lessons from the local runs, straight from the trust layer:
 
 1. **Self-consistency buys resolution, and resolution buys coverage.** Greedy
    verbalized confidence collapsed to 5 distinct values — the gate physically
@@ -244,9 +264,9 @@ loop, the trust layer (calibration + CV + bootstrap CIs + LLM-as-judge +
 audit sampling + the CI regression gate), gold-set growth, and **all three
 beachhead label types** — classification, pairwise/preference, and span/NER
 (each producing a calibrated coverage@precision number, the Phase 1 exit
-criterion). Still open: a frontier-model coverage@precision number on a real
-partner dataset (the tooling is in `scripts/`; it needs an API key — local
-models measured free, see above). Phase 2 (Loop) has begun: run-over-run
+criterion). The frontier comparison is done (Haiku 4.5 vs local Qwen, table
+above); the remaining Phase 0 ask is the same loop on a real *partner*
+dataset with curated gold. Phase 2 (Loop) has begun: run-over-run
 instrumentation ships, and the cluster router was built and A/B'd — the
 harness kept confidence-first as default (21 vs 17 errors found at equal
 budgets). Still ahead: the rest of Phase 2 (event lake, real-usage
