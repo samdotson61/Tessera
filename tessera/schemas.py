@@ -198,6 +198,9 @@ class GateResult:
     n_judge_vetoed: int = 0         # auto-apply candidates the LLM judge routed to a human
     n_audit_pending: int = 0        # auto-applied items awaiting human audit
     coverage_ci: Optional[list] = None   # [lo, hi] bootstrap 95% CI on gold coverage
+    n_propagated: int = 0           # near-duplicate members carrying their representative's label
+    autopilot_level: int = 0        # 0 = gate at the base target; each level halves allowed error
+    effective_target: Optional[float] = None   # tightened target actually gated at (autopilot)
 
 
 @dataclass
@@ -219,6 +222,9 @@ class QualityReport:
     n_audit_pending: int = 0              # auto-applied items awaiting audit review
     n_audited: int = 0                    # audit reviews completed
     audit_precision: Optional[float] = None   # share of audited labels the human confirmed
+    n_propagated: int = 0                 # labels carried by near-duplicate propagation
+    autopilot_level: int = 0              # current autopilot tightening level (0 = base target)
+    effective_target: Optional[float] = None  # tightened target the gate actually ran at
     caveats: list = field(default_factory=list)
     generated_at: str = field(default_factory=now_iso)
 

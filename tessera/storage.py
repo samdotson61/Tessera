@@ -50,6 +50,12 @@ CREATE TABLE IF NOT EXISTS runs (
     n_auto INTEGER, n_queue INTEGER, n_gold INTEGER, n_audit_pending INTEGER,
     human_touches INTEGER
 );
+CREATE TABLE IF NOT EXISTS clusters (
+    item_id TEXT PRIMARY KEY, dataset_id TEXT, rep_id TEXT, sim REAL
+);
+CREATE TABLE IF NOT EXISTS kv (
+    dataset_id TEXT, key TEXT, value TEXT, PRIMARY KEY (dataset_id, key)
+);
 CREATE INDEX IF NOT EXISTS idx_items_ds ON items(dataset_id);
 CREATE INDEX IF NOT EXISTS idx_pred_ds ON predictions(dataset_id);
 CREATE INDEX IF NOT EXISTS idx_events_ds ON events(dataset_id);
@@ -195,6 +201,35 @@ class Storage:
             (dataset_id,)).fetchall()
         return {r["source"]: r["n"] for r in rows}
 
+    # ---- near-duplicate clusters (propagation provenance) ----
+    def set_clusters(self, dataset_id, groups: dict):
+        """Replace the dataset's member->representative map. groups maps
+        member item_id -> (rep_id, cosine similarity); representatives and
+        unclustered items simply have no row."""
+        with self._lock:
+            self.conn.execute("DELETE FROM clusters WHERE dataset_id=?", (dataset_id,))
+            self.conn.executemany(
+                "INSERT OR REPLACE INTO clusters VALUES (?,?,?,?)",
+                [(mid, dataset_id, rep, sim) for mid, (rep, sim) in groups.items()])
+            self.conn.commit()
+
+    def get_clusters(self, dataset_id) -> dict:
+        rows = self.conn.execute(
+            "SELECT * FROM clusters WHERE dataset_id=?", (dataset_id,)).fetchall()
+        return {r["item_id"]: (r["rep_id"], r["sim"]) for r in rows}
+
+    # ---- per-dataset key/value state (autopilot level etc.) ----
+    def get_kv(self, dataset_id, key, default=None):
+        r = self.conn.execute("SELECT value FROM kv WHERE dataset_id=? AND key=?",
+                              (dataset_id, key)).fetchone()
+        return r["value"] if r else default
+
+    def set_kv(self, dataset_id, key, value):
+        with self._lock:
+            self.conn.execute("INSERT OR REPLACE INTO kv VALUES (?,?,?)",
+                              (dataset_id, key, str(value)))
+            self.conn.commit()
+
     # ---- events ----
     def append_event(self, e: Event) -> int:
         with self._lock:
@@ -290,6 +325,7 @@ class Storage:
             "auto_applied": q("SELECT COUNT(*) FROM predictions WHERE dataset_id=? AND auto_applied=1"),
             "queued": q("SELECT COUNT(*) FROM predictions WHERE dataset_id=? AND routed=1"),
             "audit_pending": q("SELECT COUNT(*) FROM predictions WHERE dataset_id=? AND audit=1"),
+            "propagated": q("SELECT COUNT(*) FROM predictions WHERE dataset_id=? AND source='propagated'"),
             "events": q("SELECT COUNT(*) FROM events WHERE dataset_id=?"),
             "finalized": q("SELECT COUNT(*) FROM items WHERE dataset_id=? AND final_label IS NOT NULL"),
         }

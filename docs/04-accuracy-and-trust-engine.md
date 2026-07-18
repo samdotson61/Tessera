@@ -152,6 +152,13 @@ The engine stacks five layers. Layers 1–4 each *produce a confidence signal or
 
 **Failure modes / pitfalls.** A too-small or non-stratified gold set gives a confident-looking but unrepresentative curve (§7). A contaminated gold set (human errors) is the worst case — hence running confident learning on the gold itself.
 
+### The closed loop (shipped v0.10.0)
+
+Two mechanisms turn the layers above from a measurement stack into a system that acts on its own evidence:
+
+- **Consensus gate** (`TESSERA_SPECIALIST=1`) — the L1 ensemble-disagreement signal, made free. The Tier-0 specialist (a stdlib logistic head over hashed-BoW features, docs/05 Phase B's smallest form) joins the ensemble as an ordinary member. It trains on a hash-stable **half** of the trusted labels, and L2 calibrates **only on the other half** — the leak guard, since training memorization otherwise masquerades as agreement exactly where the calibrator looks. The active guard is detected from stored votes, so report-time re-gates stay leak-safe with no configuration. Measured (AG News, 297 gold, held-back truth): the 4B went from 64% to **93.5% coverage at the 90% target with the promise kept out-of-sample (92.7% unseen)**; the 2B from 33.5%@88.1% to 49.8%@98.0%. Disagreement between a microsecond head and the LLM is nearly as decorrelating as a second model family, at none of the cost.
+- **Audit autopilot** (`TESSERA_AUTOPILOT=1`) — L5's audit stream, acting on the gate. Each decision window (default 20 fresh audits since the last adjustment) is judged with an exact one-sided binomial test against the target: a confident breach (p < target at 95% confidence) tightens the gate one level — allowed error halves per level, capped at 3 — a clean window at/above the promise relaxes one level, and inconclusive evidence accumulates until it isn't. The report states the level and the effective target the gate actually ran at; report-only re-gates read but never consume evidence. Combined with audit corrections entering gold and the specialist retraining every run, drift now *tightens* the system and pulls humans back in, rather than silently spending the SLA.
+
 ## 4. Calibration deep-dive
 
 **Why raw LLM confidence is untrustworthy.** Instruction-tuned LLMs are trained to sound fluent and helpful, not to report well-calibrated probabilities. The result is systematic **overconfidence**: a model's raw "0.97" might empirically be right only 80% of the time. Verbalized confidence is worse — it anchors high and clusters at round numbers (90, 95, 99). Using any raw number as if it were P(correct) would set the gate in the wrong place and break the precision guarantee. **Calibration is the layer that converts vibes into a probability we can gate on.**

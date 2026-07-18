@@ -60,6 +60,21 @@ def build_quality_report(storage, dataset_id, taxonomy, gate_result):
         caveats.append(f"{n_human_gold} gold item(s) were grown from human review decisions; "
                        "they over-represent low-confidence items, so per-band calibration "
                        "there is better sampled but the seed gold remains the unbiased core.")
+    spec_active = any(any(str(m).startswith("specialist") for m in p.votes) for p in preds)
+    if spec_active:
+        caveats.append("Consensus specialist is in the ensemble: disagreement with the model "
+                       "flattens confidence and routes. Calibration used only the half of the "
+                       "trusted labels the specialist never trained on (leak guard); n_gold "
+                       "reflects that half.")
+    if gate_result.n_propagated:
+        caveats.append(f"{gate_result.n_propagated} auto label(s) are near-duplicate "
+                       "propagations: the member mirrors its representative's label and was "
+                       "never labeled directly. Propagated labels stay in the audit universe.")
+    if gate_result.autopilot_level:
+        caveats.append(f"AUTOPILOT level {gate_result.autopilot_level}: audit evidence breached "
+                       f"the target, so the gate ran at an effective target of "
+                       f"{gate_result.effective_target:.1%} (allowed error halved per level). "
+                       "Coverage reflects the tightened gate.")
     if gate_result.n_judge_vetoed:
         caveats.append(f"LLM judge vetoed {gate_result.n_judge_vetoed} auto-apply candidate(s) "
                        "to the human queue; reported coverage is post-veto.")
@@ -85,4 +100,7 @@ def build_quality_report(storage, dataset_id, taxonomy, gate_result):
         n_audit_pending=n_audit_pending, n_audited=audit["n_audited"],
         audit_precision=(round(audit["audit_precision"], 4)
                          if audit["audit_precision"] is not None else None),
+        n_propagated=gate_result.n_propagated,
+        autopilot_level=gate_result.autopilot_level,
+        effective_target=gate_result.effective_target,
         caveats=caveats)

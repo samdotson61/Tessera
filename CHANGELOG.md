@@ -3,6 +3,73 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.10.0 — 2026-07-17
+
+The automation pass: consensus gate, near-duplicate propagation, and the
+audit autopilot — the three pieces that turn the loop into a system a human
+supervises rather than works.
+
+### Added
+- **Consensus gate** (`TESSERA_SPECIALIST=1`): the Tier-0 specialist joins
+  the labeling ensemble as an ordinary member, trained on a hash-stable HALF
+  of the trusted labels; the gate then calibrates only on the other half
+  (leak guard, detected from stored votes so report-time re-gates stay
+  consistent). Specialist–LLM disagreement flattens ensemble confidence and
+  routes. `TESSERA_SPECIALIST_MIN` (default 10) sets the minimum training
+  half before it joins; classification only.
+- **Near-duplicate propagation** (`TESSERA_PROPAGATE=<cosine>`, e.g. 0.95):
+  greedy leader grouping at a high cosine threshold; only representatives —
+  plus everything holding gold — are labeled by the LLM, and members mirror
+  their representative's label, confidence, and gate state (provenance in
+  the `clusters` table and the rationale). Members stay in the audit
+  universe. Resolving a representative resolves its group (bulk accept);
+  an audit reject un-ships the group; undo restores it; a member a human
+  has touched is emancipated and never mirrored again.
+- **Audit autopilot** (`TESSERA_AUTOPILOT=1`): closed-loop gate control from
+  audit evidence. Each adjustment judges only the audits since the last one
+  (min window `TESSERA_AUTOPILOT_MIN`, default 20): a breach — exact
+  one-sided binomial test against the target at 95% confidence — raises the
+  tightening level (allowed error halves per level, capped at 3); a clean
+  window at/above the target lowers it. The gate then runs at the effective
+  target; report and CLI state the level and the tightened target.
+  Report-only re-gates read the level but never consume evidence.
+- `GateResult`/`QualityReport` carry `n_propagated`, `autopilot_level`,
+  `effective_target`; `counts()` reports propagated rows; CLI summary and
+  report caveats surface all three features.
+
+### Measured (AG News 400, 297 gold, held-back truth; cached champion calls)
+- **Consensus 4B @ 90% target: 93.5% coverage at 92.8% TRUE (92.7% on items
+  the calibrator/specialist never saw)** — versus 64.0% coverage without
+  the specialist. The 90%-coverage goal is met on the noisy benchmark.
+- Consensus 2B @ 90%: 49.8% coverage at 98.0% TRUE (97.1% unseen) — versus
+  33.5% @ 88.1% alone; the co-signal fixes the small model's confidence.
+- Consensus 4B @ 85%: 100% coverage at 88.8% TRUE (89.3% unseen). @ 95%:
+  still honestly refused (0 coverage) — label noise, not signal, binds.
+- 2B @ 85% keeps the promise in aggregate (89.3%) but its unseen split dips
+  to 82.8% — prefer 2B @ 90% or the 4B tiers.
+- Near-duplicate density is corpus-dependent and both benchmarks arrive
+  pre-deduped (AG News: 1 member at 0.9; SMS: 4–7 at 0.95–0.85), so
+  propagation's call savings are ~1–2% there; the semantics are covered by
+  tests and the factor scales with real corpus redundancy.
+
+### Measured (SMS 300, live 4B logprob run, hidden reference)
+- The logprob head alone at a 90% target over-promises on this task: 100%
+  coverage at 85.3% TRUE. **Consensus catches it: 85.7% coverage at 89.9%
+  TRUE (88.6% unseen)** — the co-signal routed the 43 items that broke the
+  promise. At 95% both configs honestly refuse under CV. All 4 propagated
+  members (cosine 1.00) match the hidden reference.
+- **Closed loop, live:** on the over-promising config, an oracle worked the
+  93-item audit slice (86.0% confirmed vs the 90% promise). The autopilot
+  correctly held level 0 (p≈0.13 — not confident breach evidence), but the
+  13 audit corrections entered gold and the re-gate collapsed coverage
+  100%→0.3%: the system un-shipped the broken promise by itself, through
+  the first-responder channel (gold growth), with the autopilot as backstop.
+
+### Tests
+165 (23 new: consensus split/leak guard, propagation mirror/bulk-accept/
+un-ship/undo/emancipation/re-gate lockstep, autopilot breach/recovery/
+report-isolation/accumulation).
+
 ## 0.9.0 — 2026-07-17
 
 The limits pass: low-end verdicts, honest gold at scale, the Tier-0

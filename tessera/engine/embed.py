@@ -31,6 +31,33 @@ def cosine(a: dict, b: dict) -> float:
     return sum(x * b.get(k, 0.0) for k, x in a.items())
 
 
+def dedup_groups(rendered: dict, threshold: float, force_reps=(), dim: int = 256) -> dict:
+    """Near-duplicate grouping for label propagation: {member_id: (rep_id, sim)}.
+
+    Greedy leader pass at a HIGH cosine threshold — propagation is only sound
+    between texts that say essentially the same thing (0.9+ recommended).
+    force_reps (gold items) are seeded as leaders first so anything with a
+    trusted label is always labeled directly and never propagated over.
+    Deterministic (sorted ids); representatives have no row in the result."""
+    vecs = {iid: embed(t, dim) for iid, t in rendered.items()}
+    forced = [i for i in sorted(set(force_reps)) if i in vecs]
+    leaders = [(i, vecs[i]) for i in forced]
+    out = {}
+    seeded = set(forced)
+    for iid in sorted(vecs):
+        if iid in seeded:
+            continue
+        v = vecs[iid]
+        for rid, lv in leaders:
+            s = cosine(v, lv)
+            if s >= threshold:
+                out[iid] = (rid, s)
+                break
+        else:
+            leaders.append((iid, v))
+    return out
+
+
 def leader_clusters(vectors: dict, threshold: float = 0.35) -> dict:
     """Greedy leader clustering: {id: cluster_index}. Deterministic (sorted ids);
     an item joins the first leader within the cosine threshold, else founds a

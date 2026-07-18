@@ -68,9 +68,13 @@ The one piece of intelligence we add in Phase A — before any training — is *
 
 The effect is a cheap, training-free flywheel that runs *immediately*: as the gold set grows from human corrections, the retrieved exemplars get better and more on-distribution, so the frontier model's labels improve run-over-run **with no fine-tuning at all**. This buys accuracy from the first hundred corrections — long before we have enough data to justify training a model — and it bridges directly into Phase B, because the same accumulated gold set is the training corpus.
 
+**Near-duplicate propagation (shipped v0.10.0)** is the other zero-training lever, and it prices redundancy instead of difficulty: real org corpora (tickets, form responses, alert streams) repeat themselves, so items are grouped at a high cosine threshold (`TESSERA_PROPAGATE=0.95`), only group representatives — plus anything holding gold — are labeled by the LLM, and members mirror their representative's label and gate state with full provenance. Members stay in the audit universe, and in review a group resolves as one: accepting a representative bulk-accepts its members, an audit reject un-ships the whole group, and a member a human edits is emancipated from the mirror. The LLM-call savings equal the corpus's duplication factor (benchmark sets arrive pre-deduped, ~1–2%; raw operational data is typically far higher), and consistency *within* a group is enforced by construction rather than hoped for.
+
 ## 4. Phase B — per-customer specialized labelers (the first real moat)
 
 This is **Phase 3 (Flywheel)** of the [roadmap](08-implementation-and-development-plan.md): the first defensible asset. We distill the frontier model's behavior — corrected by humans on the customer's own taxonomy — into a small private model that the customer owns.
+
+*Its smallest form already ships:* the v0.10.0 **consensus gate** trains the stdlib Tier-0 specialist on half the trusted labels each run and seats it in the ensemble, where its agreement with the LLM is the coverage lever (measured: 64%→93.5% coverage at a kept 90% promise; details in [docs/04](04-accuracy-and-trust-engine.md) §3). Phase B proper replaces that logistic head with the LoRA-tuned model below — same seat, same leak-safe calibration split, more capacity.
 
 ### Trigger conditions
 

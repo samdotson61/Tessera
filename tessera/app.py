@@ -6,6 +6,8 @@ import os
 
 from .schemas import Dataset, Item, Taxonomy, GoldItem
 from .storage import Storage
+from .engine.embed import dedup_groups
+from .engine.specialist import SpecialistLabeler, train_consensus
 from .labelers import make_labelers
 from .labelers.judge import make_judge
 from .pipeline import run_labeling_pass, calibrate_and_gate
@@ -103,7 +105,35 @@ def run_full(storage, dataset_id, taxonomy, settings, target_precision=None):
         items = {it.id: it for it in storage.get_items(dataset_id)}
         examples = [(items[iid].render(), lab) for iid, lab in gold.items() if iid in items]
     labelers = make_labelers(settings, examples=examples)
-    run_labeling_pass(storage, dataset_id, taxonomy, labelers, workers=settings.workers)
+
+    # Consensus gate (docs/04): the Tier-0 specialist joins the ensemble,
+    # trained only on the TRAIN half of the trusted labels (the gate then
+    # calibrates on the other half — see calibrate_and_gate's leak guard).
+    # Disagreement with the LLM flattens confidence and routes; measured, the
+    # agreement subset ran 95.5% true against 66.4% where they disagreed.
+    if getattr(settings, "specialist", False):
+        spec, _n = train_consensus(storage, dataset_id, taxonomy,
+                                   getattr(settings, "specialist_min_train", 10))
+        if spec is not None:
+            labelers = list(labelers) + [SpecialistLabeler(spec)]
+
+    # Near-duplicate propagation (docs/05): only cluster representatives — and
+    # everything holding gold — hit the LLM; members mirror their rep at the
+    # gate. On redundant corpora this multiplies throughput by the duplication
+    # factor without leaving the audit universe.
+    only_ids = None
+    prop = float(getattr(settings, "propagate", 0) or 0)
+    if prop > 0:
+        items = storage.get_items(dataset_id)
+        groups = dedup_groups({it.id: it.render() for it in items}, prop,
+                              force_reps=set(storage.get_gold(dataset_id)))
+        storage.set_clusters(dataset_id, groups)
+        only_ids = {it.id for it in items} - set(groups)
+    else:
+        storage.set_clusters(dataset_id, {})
+
+    run_labeling_pass(storage, dataset_id, taxonomy, labelers,
+                      workers=settings.workers, only_ids=only_ids)
     return calibrate_and_gate(storage, dataset_id, taxonomy, target, settings,
                               judge=make_judge(settings))
 

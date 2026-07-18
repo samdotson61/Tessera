@@ -13,6 +13,7 @@ to be checked by it (docs/05 §9's poisoning warning).
 """
 from __future__ import annotations
 
+import hashlib
 import math
 import random
 
@@ -95,3 +96,39 @@ def train_from_storage(storage, dataset_id, taxonomy) -> Specialist:
             texts.append(items[iid].render())
             labels.append(lab)
     return Specialist(taxonomy.labels).train(texts, labels)
+
+
+def consensus_split(dataset_id: str, item_id: str) -> str:
+    """Hash-stable half split of trusted labels: 'train' or 'calib'.
+
+    The consensus specialist may only train on the 'train' half; calibration
+    may only use the 'calib' half. Training memorization otherwise masquerades
+    as ensemble agreement on exactly the items the calibrator learns from
+    (measured on the cascade: same-gold calibration waved everything through)."""
+    h = hashlib.sha256(f"spec-split|{dataset_id}|{item_id}".encode()).digest()
+    return "train" if int.from_bytes(h[:8], "big") % 2 == 0 else "calib"
+
+
+def train_consensus(storage, dataset_id, taxonomy, min_train: int = 10):
+    """Train the consensus specialist on the TRAIN half of the trusted corpus.
+
+    Returns (Specialist, n_train) or (None, n_train) when there is not enough
+    signal yet: fewer than min_train examples, or fewer than 2 distinct labels.
+    Classification only — the hashed-BoW head has no notion of spans or of
+    A/B response positions."""
+    if taxonomy.label_type != "classification":
+        return None, 0
+    gold = storage.get_gold(dataset_id)
+    items = {it.id: it for it in storage.get_items(dataset_id)}
+    trusted = dict(gold)
+    for e in storage.get_events(dataset_id):
+        if e.routed_to_human and e.final_label is not None and e.item_id not in gold:
+            trusted[e.item_id] = e.final_label
+    texts, labels = [], []
+    for iid, lab in sorted(trusted.items()):
+        if iid in items and consensus_split(dataset_id, iid) == "train":
+            texts.append(items[iid].render())
+            labels.append(lab)
+    if len(texts) < min_train or len(set(labels)) < 2:
+        return None, len(texts)
+    return Specialist(taxonomy.labels).train(texts, labels), len(texts)

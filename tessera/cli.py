@@ -45,6 +45,12 @@ def _print_summary(gate, taxonomy=None):
     print(f"  routed to human  : {gate.n_queue} items")
     print(f"  gold set         : {gate.n_gold} items")
     print(f"  calibration ECE  : {gate.ece_before:.3f} -> {gate.ece_after:.3f} (lower is better)")
+    if gate.n_propagated:
+        print(f"  propagated       : {gate.n_propagated} near-duplicate members mirror "
+              f"their representative's label")
+    if gate.autopilot_level:
+        print(f"  AUTOPILOT        : level {gate.autopilot_level} — audit breach; gating at "
+              f"{gate.effective_target:.2%} effective target")
     print(f"\n  >> Auto-labeled {pct}% of the data at >= {gate.target_precision:.0%} precision; "
           f"a human only touches the remaining {gate.n_queue}.")
 

@@ -125,6 +125,11 @@ backoff, and a concurrent labeling pool.
 | `TESSERA_GROW_GOLD` | `1` | record review accepts/edits as gold (source `human`) |
 | `TESSERA_AUDIT_RATE` | `0.02` | share of auto-applied items also routed for human audit |
 | `TESSERA_ROUTER` | `confidence` | queue order; `cluster` = experimental AL formula (lost the first errors-found A/B 17–21) |
+| `TESSERA_SPECIALIST` | `0` | consensus gate: the Tier-0 specialist joins the ensemble (trained on half the trusted labels; calibration uses the other half) |
+| `TESSERA_SPECIALIST_MIN` | `10` | training examples required before the specialist joins |
+| `TESSERA_PROPAGATE` | `0` | near-duplicate propagation cosine threshold (e.g. `0.95`); `0` = off |
+| `TESSERA_AUTOPILOT` | `0` | closed-loop gate control from audit evidence (breach tightens, recovery relaxes) |
+| `TESSERA_AUTOPILOT_MIN` | `20` | audits per autopilot decision window |
 
 ## Run it on a real dataset
 
@@ -193,15 +198,69 @@ items)** — a conservative promise kept with margin. At 85%: 99.2% coverage.
 Grow gold until the estimate stops moving; then the dial trades coverage for
 precision truthfully across its whole range.
 
+**The consensus gate (v0.10.0) is the coverage lever.** `TESSERA_SPECIALIST=1`
+trains the stdlib Tier-0 specialist on a hash-stable *half* of the trusted
+labels and adds it to the ensemble (the gate calibrates only on the other
+half — the leak guard). Agreement sharpens confidence; disagreement flattens
+it and routes. Same cached 4B calls, same 297 gold, held-back truth:
+
+| run | target | coverage | true (all auto) | true (unseen) |
+|---|---|---|---|---|
+| 4B logprob alone | 90% | 64.0% | 94.1% | 97.2% |
+| **4B + consensus** | 90% | **93.5%** | **92.8%** | **92.7%** |
+| 4B + consensus | 85% | 100.0% | 88.8% | 89.3% |
+| 4B + consensus | 95% | 0% — still honestly refused | — | — |
+| 2B logprob alone | 90% | 33.5% | 88.1% | — |
+| **2B + consensus** | 90% | **49.8%** | **98.0%** | **97.1%** |
+
+A ~150-example logistic head that trains in under a second took the 4B from
+64% to **93.5% coverage with the 90% promise kept out-of-sample**, and fixed
+the 2B's confidence signal outright (+16 coverage, +10 precision — the
+economy tier is now genuinely usable). The 95% refusal stands: consensus
+sharpens the signal, it does not manufacture precision the dataset's label
+noise can't support. (2B @ 85% holds in aggregate but its unseen split dips
+to 82.8% — prefer 2B @ 90% or a 4B tier.)
+
 Measured and retired (the harness arbitrates): the cross-family local
 ensemble (identical quality at 1.5× cost), static few-shot (coverage
 regression, and its speed rationale is void — cross-item partial-prefix KV
 reuse does not currently function on llama-server's chat endpoint), and the
-2B/9B for quality/low-end respectively (2B = economy tier: 33.5%@90-target;
-9B projected ~20s/item on X1-class CPUs). A stdlib Tier-0 specialist +
-cascade (`scripts/cascade.py`) ships for organization-scale corpora — it
-trains in <1s and gates honestly (train/calibrate split), and earns its keep
-once flywheel corrections reach the thousands.
+9B for low-end (projected ~20s/item on X1-class CPUs). The cascade harness
+(`scripts/cascade.py`) still ships for measuring specialist → LLM → human
+tiering on organization-scale corpora.
+
+**Near-duplicate propagation** (`TESSERA_PROPAGATE=0.95`) labels each tight
+cosine group once — representatives (and anything holding gold) hit the LLM;
+members mirror the rep's label and gate state with provenance, stay in the
+audit universe, and resolve as a group in review (accepting a rep bulk-
+accepts its members; an audit reject un-ships them all; a member a human
+edits is emancipated). Honest scope note: both benchmark corpora arrive
+pre-deduped (AG News: 1 near-dup at 0.9; SMS: 4–7), so the measured call
+savings there are ~1–2% — the factor scales with your corpus's real
+redundancy, which for raw org data (tickets, form responses, alert streams)
+is typically far higher.
+
+**The audit autopilot** (`TESSERA_AUTOPILOT=1`) closes the loop docs/04
+drew: the audit verdict stream *is* the production SLA check, so the gate
+now acts on it. Each decision window (default 20 fresh audits) is judged
+with an exact binomial test against the target: a confident breach tightens
+the gate one level (allowed error halves, capped at 3 levels), a clean
+window at/above the promise relaxes one level, and inconclusive evidence
+accumulates. The report states the level and the effective target the gate
+actually ran at; corrections still flow to gold, and with the specialist on,
+every run retrains it — drift pulls humans back in instead of silently
+poisoning labels.
+
+**The loop, demonstrated live (SMS 300, hidden reference):** the plain
+logprob head at a 90% target over-promised — 100% coverage at 85.3% true.
+Consensus caught it in-flight (85.7% coverage at 89.9% true, the 43
+promise-breaking items routed; all 4 propagated members matched the
+reference). And on the over-promising config, working the 93-item audit
+slice (86.0% confirmed) made the system un-ship the broken promise on its
+own: the autopilot rightly held its level — 86% over 93 audits is not
+95%-confident breach evidence — but the 13 corrections entered gold and the
+re-gate collapsed coverage to 0.3%, an honest refusal. Defense in depth:
+gold growth is the first responder, the autopilot the backstop.
 
 The frontier comparison (2026-07-17) added three more lessons:
 
@@ -273,8 +332,9 @@ tessera/            core package (stdlib only)
   labelers/         stub (offline), Anthropic/OpenAI labelers (self-consistency
                     + cache + retries), and the LLM-as-judge
   engine/           confidence · calibration · metrics (CIs, reliability) ·
-                    gating · router (+embed clusters) · goldset · verify ·
-                    audit sampling · spans
+                    gating · router (+embed clusters, dedup groups) · goldset ·
+                    verify · audit sampling · spans · specialist (Tier-0 +
+                    consensus member)
   pipeline.py       the orchestrator (label → calibrate+gate+judge → human action/undo)
   flywheel.py       training-pair export + event stats
   quality.py        the dataset quality report
@@ -301,9 +361,12 @@ above); the remaining Phase 0 ask is the same loop on a real *partner*
 dataset with curated gold. Phase 2 (Loop) has begun: run-over-run
 instrumentation ships, and the cluster router was built and A/B'd — the
 harness kept confidence-first as default (21 vs 17 errors found at equal
-budgets). Still ahead: the rest of Phase 2 (event lake, real-usage
-dashboards), Phase 3 (per-customer distillation), and Phase 4 (the cross-task
-"Composer" labeler), designed in `docs/`. See
+budgets). The v0.10.0 automation pass added the consensus gate, near-
+duplicate propagation, and the audit autopilot — the closed loop that lets
+a human supervise the system instead of working it. Still ahead: the rest
+of Phase 2 (event lake, real-usage dashboards), Phase 3 (per-customer
+distillation), and Phase 4 (the cross-task "Composer" labeler), designed in
+`docs/`. See
 [`docs/09`](docs/09-risks-open-questions-and-glossary.md) for risks and open
 questions.
 
