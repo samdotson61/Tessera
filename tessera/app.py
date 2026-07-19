@@ -113,7 +113,8 @@ def run_full(storage, dataset_id, taxonomy, settings, target_precision=None):
     # agreement subset ran 95.5% true against 66.4% where they disagreed.
     if getattr(settings, "specialist", False):
         spec, _n = train_consensus(storage, dataset_id, taxonomy,
-                                   getattr(settings, "specialist_min_train", 10))
+                                   getattr(settings, "specialist_min_train", 10),
+                                   min_calib=settings.min_gold_for_calibration)
         if spec is not None:
             labelers = list(labelers) + [SpecialistLabeler(spec)]
 

@@ -3,6 +3,20 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.11.0 — 2026-07-17
+
+### Changed
+- **The consensus gate is now DEFAULT ON** (`TESSERA_SPECIALIST=0` to
+  disable). Safe by construction: the specialist joins only on a
+  classification task whose train half holds ≥ `TESSERA_SPECIALIST_MIN`
+  examples of ≥ 2 labels, **and** — the new rule that makes default-on
+  honest — only when the calibration half keeps at least
+  `TESSERA_MIN_GOLD` gold items, so enabling the co-signal can never cost
+  cross-validated calibration. Otherwise the run is byte-identical to
+  v0.9 behavior (the bundled 24-gold demo: specialist stays out, CV
+  survives; AG News 297-gold: joins and delivers 93.5% @ 92.8% TRUE with
+  no flags set).
+
 ## 0.10.0 — 2026-07-17
 
 The automation pass: consensus gate, near-duplicate propagation, and the

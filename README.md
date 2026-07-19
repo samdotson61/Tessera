@@ -125,7 +125,7 @@ backoff, and a concurrent labeling pool.
 | `TESSERA_GROW_GOLD` | `1` | record review accepts/edits as gold (source `human`) |
 | `TESSERA_AUDIT_RATE` | `0.02` | share of auto-applied items also routed for human audit |
 | `TESSERA_ROUTER` | `confidence` | queue order; `cluster` = experimental AL formula (lost the first errors-found A/B 17–21) |
-| `TESSERA_SPECIALIST` | `0` | consensus gate: the Tier-0 specialist joins the ensemble (trained on half the trusted labels; calibration uses the other half) |
+| `TESSERA_SPECIALIST` | `1` | consensus gate (default ON): the Tier-0 specialist joins the ensemble (trained on half the trusted labels; calibration uses the other half); set `0` to disable |
 | `TESSERA_SPECIALIST_MIN` | `10` | training examples required before the specialist joins |
 | `TESSERA_PROPAGATE` | `0` | near-duplicate propagation cosine threshold (e.g. `0.95`); `0` = off |
 | `TESSERA_AUTOPILOT` | `0` | closed-loop gate control from audit evidence (breach tightens, recovery relaxes) |
@@ -198,11 +198,15 @@ items)** — a conservative promise kept with margin. At 85%: 99.2% coverage.
 Grow gold until the estimate stops moving; then the dial trades coverage for
 precision truthfully across its whole range.
 
-**The consensus gate (v0.10.0) is the coverage lever.** `TESSERA_SPECIALIST=1`
-trains the stdlib Tier-0 specialist on a hash-stable *half* of the trusted
-labels and adds it to the ensemble (the gate calibrates only on the other
-half — the leak guard). Agreement sharpens confidence; disagreement flattens
-it and routes. Same cached 4B calls, same 297 gold, held-back truth:
+**The consensus gate (v0.10.0, default ON since v0.11.0) is the coverage
+lever.** It trains the stdlib Tier-0 specialist on a hash-stable *half* of
+the trusted labels and adds it to the ensemble (the gate calibrates only on
+the other half — the leak guard). Agreement sharpens confidence;
+disagreement flattens it and routes. It arms itself only when the trade is
+sound: a classification task, enough training examples, **and enough gold
+left on the calibration half to keep cross-validation alive** — otherwise
+the run is unchanged (the bundled demo stays CV'd; `TESSERA_SPECIALIST=0`
+disables outright). Same cached 4B calls, same 297 gold, held-back truth:
 
 | run | target | coverage | true (all auto) | true (unseen) |
 |---|---|---|---|---|

@@ -49,12 +49,37 @@ class TestConsensusSplit(unittest.TestCase):
         self.assertEqual(train_consensus(st, "d", pair_tax, min_train=1), (None, 0))
         st.close()
 
+    def test_default_on_never_costs_cross_validation(self):
+        # The safety rule behind default-on: if the split would leave fewer
+        # than min_calib gold on the calibration side, the specialist stays
+        # out and the run is unchanged (the bundled 14-gold demo case).
+        d = tempfile.mkdtemp()
+        st = Storage(os.path.join(d, "t.db"))
+        items, gold = _dataset(24)
+        ingest(st, "d", "d", items, TAX, gold)
+        spec, _n = train_consensus(st, "d", TAX, min_train=4, min_calib=20)
+        self.assertIsNone(spec)
+        st.close()
+
+    def test_demo_default_settings_keep_cv_and_full_gold(self):
+        from tessera.app import bootstrap_demo
+        d = tempfile.mkdtemp()
+        settings = Settings(db_path=os.path.join(d, "demo.db"), cache_path="none")
+        self.assertTrue(settings.specialist)   # default ON since v0.11.0
+        st = Storage(settings.db_path)
+        _tax, gate = bootstrap_demo(st, settings, target_precision=0.95)
+        self.assertTrue(gate.cross_validated)  # spec stayed out; CV survived
+        preds = st.get_predictions("demo")
+        self.assertFalse(any(
+            any(m.startswith("specialist") for m in p.votes) for p in preds))
+        st.close()
+
     def test_train_consensus_trains_only_on_train_half(self):
         d = tempfile.mkdtemp()
         st = Storage(os.path.join(d, "t.db"))
         items, gold = _dataset(24)
         ingest(st, "d", "d", items, TAX, gold)
-        spec, n = train_consensus(st, "d", TAX, min_train=4)
+        spec, n = train_consensus(st, "d", TAX, min_train=4, min_calib=4)
         self.assertIsNotNone(spec)
         expected = sum(1 for g in gold if consensus_split("d", g.item_id) == "train")
         self.assertEqual(n, expected)

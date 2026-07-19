@@ -74,7 +74,7 @@ The effect is a cheap, training-free flywheel that runs *immediately*: as the go
 
 This is **Phase 3 (Flywheel)** of the [roadmap](08-implementation-and-development-plan.md): the first defensible asset. We distill the frontier model's behavior — corrected by humans on the customer's own taxonomy — into a small private model that the customer owns.
 
-*Its smallest form already ships:* the v0.10.0 **consensus gate** trains the stdlib Tier-0 specialist on half the trusted labels each run and seats it in the ensemble, where its agreement with the LLM is the coverage lever (measured: 64%→93.5% coverage at a kept 90% promise; details in [docs/04](04-accuracy-and-trust-engine.md) §3). Phase B proper replaces that logistic head with the LoRA-tuned model below — same seat, same leak-safe calibration split, more capacity.
+*Its smallest form already ships (default on since v0.11.0):* the **consensus gate** trains the stdlib Tier-0 specialist on half the trusted labels each run and seats it in the ensemble, where its agreement with the LLM is the coverage lever (measured: 64%→93.5% coverage at a kept 90% promise; details in [docs/04](04-accuracy-and-trust-engine.md) §3). Phase B proper replaces that logistic head with the LoRA-tuned model below — same seat, same leak-safe calibration split, more capacity.
 
 ### Trigger conditions
 

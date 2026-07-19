@@ -50,10 +50,14 @@ class Settings:
     audit_rate: float = 0.02          # share of AUTO-APPLIED items also routed for human audit
     router: str = "confidence"        # review-queue order: "confidence" (default — won the
                                       # errors-found-per-review A/B) | "cluster" (experimental)
-    specialist: bool = False          # consensus gate: train the Tier-0 specialist on half the
-                                      # trusted labels and add it to the ensemble; disagreement
-                                      # with the LLM flattens confidence and routes (measured:
-                                      # the agreement subset ran 95.5% true vs 66.4% on disagreement)
+    specialist: bool = True           # consensus gate (DEFAULT ON since v0.11.0): train the
+                                      # Tier-0 specialist on half the trusted labels and add it
+                                      # to the ensemble; disagreement with the LLM flattens
+                                      # confidence and routes (measured: 4B 64%->93.5% coverage
+                                      # at a kept 90% promise). Joins only when the train half
+                                      # has >= specialist_min_train examples of >= 2 labels on a
+                                      # classification task; otherwise the run is unchanged.
+                                      # TESSERA_SPECIALIST=0 disables.
     specialist_min_train: int = 10    # min training examples (train half) before the specialist joins
     propagate: float = 0.0            # near-duplicate propagation: cosine threshold (0 = off).
                                       # Only cluster representatives hit the LLM; members mirror
@@ -89,7 +93,7 @@ class Settings:
             grow_gold=os.environ.get("TESSERA_GROW_GOLD", "1") not in ("0", "false", "no"),
             audit_rate=float(os.environ.get("TESSERA_AUDIT_RATE", "0.02")),
             router=os.environ.get("TESSERA_ROUTER", "confidence"),
-            specialist=os.environ.get("TESSERA_SPECIALIST", "0") in ("1", "true", "yes"),
+            specialist=os.environ.get("TESSERA_SPECIALIST", "1") not in ("0", "false", "no"),
             specialist_min_train=int(os.environ.get("TESSERA_SPECIALIST_MIN", "10")),
             propagate=float(os.environ.get("TESSERA_PROPAGATE", "0")),
             autopilot=os.environ.get("TESSERA_AUTOPILOT", "0") in ("1", "true", "yes"),
