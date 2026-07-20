@@ -106,9 +106,10 @@ def _explicitly_configured(settings):
                 or settings.openai_url or settings.anthropic_url)
 
 
-def plan_auto(settings):
+def plan_auto(settings, force_tier=None):
     """What zero-config serving WOULD do (no side effects), or None.
-    {"tier", "model_path", "mem_gb", "mem_source", "engine"}"""
+    force_tier ("2b"/"4b", from the Settings page) skips the memory rule.
+    {"tier", "model_path", "mem_gb", "mem_source", "engine", "forced"}"""
     if os.environ.get("TESSERA_AUTOSERVE", "1") in ("0", "false", "no"):
         return None
     if _explicitly_configured(settings):
@@ -117,12 +118,14 @@ def plan_auto(settings):
     if not assets:
         return None
     mem, source = detect_memory_gb()
-    tier = pick_tier(mem)
+    tier = force_tier or pick_tier(mem)
     if tier not in assets["models"]:          # picked tier missing on disk:
-        tier = next(iter(sorted(assets["models"])))   # use what exists, honestly
+        if force_tier:
+            return None                       # a forced tier must exist — no bait-and-switch
+        tier = next(iter(sorted(assets["models"])))   # auto: use what exists, honestly
     return {"tier": tier, "model_path": assets["models"][tier],
             "mem_gb": round(mem, 1), "mem_source": source,
-            "engine": assets["engine"]}
+            "engine": assets["engine"], "forced": bool(force_tier)}
 
 
 def _point_at(settings, url):
@@ -133,19 +136,42 @@ def _point_at(settings, url):
     settings.llm_samples = 1
 
 
+_tier_serving = None     # which tier the live engine holds (for mode switches)
+
+
 def ensure_model(settings, wait_s=90, log=print):
-    """Make settings point at a working model, spawning the winc-tier engine
-    when nothing is configured. Returns a short status string. Idempotent:
-    one engine per process — a live auto-serve is REUSED (any settings
-    object gets pointed at it), never re-spawned."""
-    global _proc, _url
+    """Make settings point at a working model per settings.model_mode
+    ("auto" | "2b" | "4b" | "custom" | "stub"), spawning the winc engine when
+    needed. Returns a short status string. Idempotent: one engine per
+    process — a live auto-serve of the right tier is REUSED; a mode switch
+    stops it and spawns the requested tier."""
+    global _proc, _url, _tier_serving
+    mode = getattr(settings, "model_mode", "auto")
+    if mode == "stub":
+        settings.provider = "stub"
+        return "stub (chosen in settings)"
+    if mode == "custom":
+        if settings.custom_url:
+            settings.provider = "openai"
+            settings.openai_url = settings.custom_url
+            settings.model_id = settings.custom_model or "q"
+            settings.logprobs = True
+            settings.llm_samples = 1
+            return "custom endpoint"
+        return "auto-serve failed: custom mode chosen but no endpoint URL set"
     if _explicitly_configured(settings):
         return "explicit configuration"
+    force = mode if mode in ("2b", "4b") else None
     if _proc is not None and _proc.poll() is None and _url:
-        _point_at(settings, _url)
-        return "auto-serve already active"
-    plan = plan_auto(settings)
+        if force is None or _tier_serving == force:
+            _point_at(settings, _url)
+            return "auto-serve already active"
+        stop()   # mode switched tiers: replace the engine
+    plan = plan_auto(settings, force_tier=force)
     if plan is None:
+        if force:
+            return (f"auto-serve failed: no {force.upper()} model file found "
+                    "in the winc install")
         return "stub (offline)"
     import socket
     with socket.socket() as s:
@@ -170,6 +196,7 @@ def ensure_model(settings, wait_s=90, log=print):
             with urllib.request.urlopen(url + "/health", timeout=1) as r:
                 if r.status == 200:
                     _url = url
+                    _tier_serving = plan["tier"]
                     _point_at(settings, url)
                     log(f"model: ready on :{port}", flush=True)
                     return f"auto: winc qwen3.5-{plan['tier']}"

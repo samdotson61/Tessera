@@ -13,15 +13,16 @@ let runPoll = null;      // interval handle while a labeling run is in flight
 
 // ---- workflow shell: panels, strip, guidance ----
 
-const PANELS = ["import", "rubric", "gold", "run", "review", "export"];
+const PANELS = ["import", "rubric", "gold", "run", "review", "export", "settings"];
 
 function showPanel(name) {
   PANELS.forEach((p) => {
     document.getElementById("panel-" + p).hidden = p !== name;
-    document.querySelector(`.flow button[data-panel="${p}"]`)
-      .classList.toggle("active", p === name);
+    const strip = document.querySelector(`.flow button[data-panel="${p}"]`);
+    if (strip) strip.classList.toggle("active", p === name);
   });
   if (name === "rubric") renderRubricEditor();
+  if (name === "settings") loadSettings();
 }
 
 function currentPanel() {
@@ -63,6 +64,7 @@ function renderFlow() {
   const st = flowState();
   PANELS.forEach((p) => {
     const b = document.querySelector(`.flow button[data-panel="${p}"]`);
+    if (!b) return;   // settings lives behind the gear, not on the strip
     b.classList.toggle("done", st[p] === "done");
     b.classList.toggle("attn", st[p] === "attn");
   });
@@ -253,8 +255,11 @@ async function startRun() {
     await refreshState();
     if (S && S.run && !S.run.running) {
       clearInterval(runPoll); runPoll = null;
-      if (!S.run.error) note("runMsg", "run complete — the queue is ready in Review (5)", true);
       await refreshQueue();
+      if (!S.run.error) {
+        note("runMsg", "run complete", true);
+        showPanel("review");   // the queue is the next thing you do — go there
+      }
     }
   }, 1500);
 }
@@ -263,6 +268,67 @@ async function switchDataset(id) {
   const r = await postJSON("/api/dataset", { id });
   if (r.error) { await refreshState(); return; }
   await refreshState(); await refreshQueue();
+}
+
+// ---- settings panel ----
+
+async function loadSettings() {
+  const s = await getJSON("/api/settings");
+  const v = s.values;
+  document.querySelectorAll('#modelModes input[name="mm"]').forEach((r) => {
+    r.checked = r.value === v.model_mode;
+    r.disabled = "model_mode" in s.pins;
+  });
+  const pinMsg = document.getElementById("modelPin");
+  if (s.pins.model_mode) {
+    pinMsg.textContent = `pinned by ${s.pins.model_mode} in your environment — unset it to choose here`;
+    pinMsg.className = "notice err";
+  } else if (!s.winc_tiers.length) {
+    pinMsg.textContent = "no winc install found — auto/2B/4B need winc.cpp models (custom endpoint and stub still work)";
+    pinMsg.className = "notice";
+  } else {
+    pinMsg.textContent = `winc models found: ${s.winc_tiers.join(", ").toUpperCase()}`;
+    pinMsg.className = "notice ok";
+  }
+  document.getElementById("customFields").hidden = v.model_mode !== "custom";
+  document.getElementById("setCustomUrl").value = v.custom_url || "";
+  document.getElementById("setCustomModel").value = v.custom_model || "";
+  const pin = (id, field) => {
+    const el = document.getElementById(id);
+    el.disabled = field in s.pins;
+    el.title = field in s.pins
+      ? `pinned by ${s.pins[field]} — unset it to edit here` : el.title;
+  };
+  document.getElementById("setWorkers").value = v.workers;
+  document.getElementById("setAudit").value = v.audit_rate;
+  document.getElementById("setProp").value = v.propagate;
+  document.getElementById("setSpec").checked = !!v.specialist;
+  document.getElementById("setAuto").checked = !!v.autopilot;
+  pin("setWorkers", "workers"); pin("setAudit", "audit_rate");
+  pin("setProp", "propagate"); pin("setSpec", "specialist");
+  pin("setAuto", "autopilot");
+  document.getElementById("setDb").textContent = `data: ${s.db_path}`;
+}
+
+async function saveSettings() {
+  const mode = document.querySelector('#modelModes input[name="mm"]:checked');
+  const body = {
+    model_mode: mode ? mode.value : "auto",
+    custom_url: document.getElementById("setCustomUrl").value.trim(),
+    custom_model: document.getElementById("setCustomModel").value.trim(),
+    workers: parseInt(document.getElementById("setWorkers").value, 10) || 8,
+    audit_rate: parseFloat(document.getElementById("setAudit").value) || 0,
+    propagate: parseFloat(document.getElementById("setProp").value) || 0,
+    specialist: document.getElementById("setSpec").checked,
+    autopilot: document.getElementById("setAuto").checked,
+  };
+  const r = await postJSON("/api/settings", body);
+  if (r.error) return note("setMsg", r.error, false);
+  let msg = "saved — serving changes apply on the next run";
+  const skipped = Object.keys(r.skipped_env_pinned || {});
+  if (skipped.length) msg += ` (env-pinned, unchanged: ${skipped.join(", ")})`;
+  note("setMsg", msg, true);
+  await refreshState();
 }
 
 async function refreshQueue() {
@@ -626,6 +692,17 @@ document.getElementById("taxSave").addEventListener("click", saveRubric);
 document.getElementById("bootStart").addEventListener("click", goldStart);
 document.getElementById("bootStop").addEventListener("click", goldStop);
 document.getElementById("runGo").addEventListener("click", startRun);
+document.getElementById("gear").addEventListener("click", () => showPanel("settings"));
+document.querySelectorAll('#modelModes input[name="mm"]').forEach((r) =>
+  r.addEventListener("change", () => {
+    document.getElementById("customFields").hidden = r.value !== "custom" || !r.checked;
+  }));
+document.getElementById("setSave").addEventListener("click", saveSettings);
+document.getElementById("guide").addEventListener("click", () => {
+  const st = flowState();
+  const next = PANELS.find((p) => st[p] === "attn");
+  if (next) showPanel(next);
+});
 
 (async function init() {
   await refreshState();

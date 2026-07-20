@@ -13,7 +13,10 @@
     <label for="dsPick" title="Every dataset in this database. Switching re-gates at the dataset's own last target.">dataset</label>
     <select id="dsPick" title="Switch dataset"></select>
   </div>
-  <div class="stats" id="stats" title="items · auto-applied · queued for you · finalized">loading…</div>
+  <div class="hdr-right">
+    <div class="stats" id="stats" title="items · auto-applied · queued for you · finalized">loading…</div>
+    <button id="gear" class="gear" title="Settings: model, workers, audit rate, trust features">⚙</button>
+  </div>
 </header>
 
 <!-- The workflow spine: every Tessera function, in the order you use them. -->
@@ -137,6 +140,45 @@
         </div>
       </div>
     </section>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="panel" id="panel-settings" hidden>
+    <h2>Settings</h2>
+    <p class="help">Saved into this database and applied on every launch. A field set by an
+       environment variable is pinned — the pin names the variable to unset if you want
+       control here.</p>
+    <h3 title="Which model labels your data.">Model</h3>
+    <div id="modelPin" class="notice"></div>
+    <div class="radios" id="modelModes">
+      <label title="Pick winc's 2B or 4B automatically by this machine's memory (≥7 GB → 4B)."><input type="radio" name="mm" value="auto" /> auto — winc tier by memory</label>
+      <label title="Always use the smaller, faster 2B."><input type="radio" name="mm" value="2b" /> winc 2B (fast)</label>
+      <label title="Always use the more accurate 4B."><input type="radio" name="mm" value="4b" /> winc 4B (accurate)</label>
+      <label title="Any OpenAI-shaped /v1/chat/completions endpoint (llama-server, vLLM, ollama…)."><input type="radio" name="mm" value="custom" /> custom endpoint</label>
+      <label title="The offline deterministic keyword labeler — no model at all."><input type="radio" name="mm" value="stub" /> offline stub</label>
+    </div>
+    <div class="grid2" id="customFields" hidden>
+      <label title="Full URL, e.g. http://127.0.0.1:8091/v1/chat/completions">endpoint URL
+        <input id="setCustomUrl" placeholder="http://127.0.0.1:8091/v1/chat/completions" /></label>
+      <label title="Model name the endpoint expects (many local servers ignore it).">model name
+        <input id="setCustomModel" placeholder="q" /></label>
+    </div>
+    <h3 title="How labeling runs behave.">Labeling</h3>
+    <div class="grid2">
+      <label title="Concurrent items per run — match your model server's parallel slots.">workers
+        <input type="number" id="setWorkers" min="1" max="32" /></label>
+      <label title="Share of auto-applied labels ALSO routed for human verification — the production check of the precision promise.">audit rate
+        <input type="number" id="setAudit" min="0" max="0.5" step="0.01" /></label>
+      <label title="Near-duplicate propagation cosine threshold (0 = off): label each tight group once.">propagation threshold
+        <input type="number" id="setProp" min="0" max="0.99" step="0.01" /></label>
+    </div>
+    <div class="row">
+      <label class="chk" title="The consensus specialist: trains on half your gold and joins the ensemble — measured as the coverage lever."><input type="checkbox" id="setSpec" /> consensus specialist</label>
+      <label class="chk" title="Closed-loop control: audit breaches tighten the gate automatically; recoveries relax it."><input type="checkbox" id="setAuto" /> audit autopilot</label>
+    </div>
+    <button id="setSave" class="primary" title="Save to this database; serving changes apply on the next run.">Save settings</button>
+    <div class="notice" id="setMsg"></div>
+    <p class="help" id="setDb"></p>
   </section>
 
   <!-- EXPORT -->

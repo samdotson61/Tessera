@@ -107,3 +107,9 @@ textarea { width: 100%; resize: vertical; }
 details { margin: 10px 0; color: var(--muted); font-size: 13px; }
 details pre { background: var(--panel2); border: 1px solid var(--border); border-radius: 7px; padding: 10px; overflow-x: auto; }
 .muted { color: var(--muted); font-weight: 400; font-size: 13px; }
+.hdr-right { display: flex; align-items: center; gap: 12px; }
+.gear { font-size: 16px; padding: 4px 10px; }
+.radios { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 14px; color: var(--text); font-size: 14px; }
+.radios label { display: flex; gap: 8px; align-items: center; }
+.chk { flex-direction: row !important; align-items: center; gap: 8px; color: var(--text) !important; font-size: 14px !important; }
+.panel h3 { margin: 16px 0 6px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }

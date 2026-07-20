@@ -33,8 +33,12 @@ app` reopens your most recently gated dataset at its own target.
 
 The UI is the whole workflow, not just review: a six-step strip — **Import
 → Rubric → Gold → Label → Review → Export** — with each step's state derived
-from the dataset's real counts and a guide line naming the honest next
-action. Import CSV/JSONL + rubric in the browser, edit the rubric in place
+from the dataset's real counts and a clickable guide line naming the honest
+next action. It opens in a **native window** when pywebview is available
+(browser otherwise), and the **⚙ Settings page** switches the model (auto /
+winc 2B / winc 4B / custom endpoint / offline stub) and the labeling knobs
+without touching an environment variable — saved per database, with
+env-set fields honestly pinned. Import CSV/JSONL + rubric in the browser, edit the rubric in place
 (saving bumps its version), author gold on demand, run the model with a
 live progress bar and an honest serving-status check, review with the
 keyboard, download labels as JSONL/CSV. Every control has a mouseover
@@ -46,10 +50,8 @@ per-user data home (`~/Library/Application Support/Tessera` on macOS,
 `%LOCALAPPDATA%\Tessera` on Windows, `$XDG_DATA_HOME/tessera` on Linux;
 `TESSERA_HOME` overrides). Launching from a different directory opens the
 same data — no paths are hardcoded, and re-running the installer upgrades
-in place, even while Tessera is running.
-`--window` gives a native window with the `[app]` extra installed;
-one-file binaries for macOS/Linux/Windows build on every release tag
-(`.github/workflows/build-app.yml`) — construction status in
+in place, even while Tessera is running. One-file binaries for
+macOS/Linux/Windows build on every release tag — construction status in
 [`appmap.mp`](appmap.mp).
 
 ## Quickstart (zero dependencies)

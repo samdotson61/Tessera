@@ -33,14 +33,20 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install pyinstaller
+      - name: Install pywebview (native window; browser fallback if it can't bundle)
+        continue-on-error: true
+        run: pip install pywebview
       - name: Build one-file binary
         shell: bash
-        run: >
-          pyinstaller --onefile --name tessera --console --noconfirm --clean
-          --add-data "tessera/web${{ matrix.sep }}tessera/web"
-          --add-data "tessera/sample_data${{ matrix.sep }}tessera/sample_data"
-          --paths . --collect-submodules tessera
-          packaging/launcher.py
+        run: |
+          EXTRA=""
+          python -c "import webview" 2>/dev/null && \
+            EXTRA="--hidden-import webview --collect-submodules webview"
+          pyinstaller --onefile --name tessera --console --noconfirm --clean \
+            --add-data "tessera/web${{ matrix.sep }}tessera/web" \
+            --add-data "tessera/sample_data${{ matrix.sep }}tessera/sample_data" \
+            --paths . --collect-submodules tessera $EXTRA \
+            packaging/launcher.py
       - name: Smoke test (offline demo through the binary)
         shell: bash
         run: |

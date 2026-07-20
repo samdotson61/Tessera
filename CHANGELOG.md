@@ -3,6 +3,47 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.19.0 — 2026-07-20
+
+### Added
+- **Settings page** (⚙ in the header): change the model without touching an
+  environment variable — auto (winc tier by memory) / forced winc 2B /
+  forced winc 4B / custom OpenAI-shaped endpoint / offline stub — plus
+  workers, audit rate, propagation threshold, consensus specialist, and
+  audit autopilot. Saved into the database and applied on every launch;
+  **fields set by environment variables are pinned and say which variable
+  to unset** (env always beats saved values — predictable for CLI users,
+  and the UI says so instead of silently losing). Switching the model
+  stops the current auto-served engine so the next run uses the new
+  choice; forcing a tier that has no model file fails honestly instead of
+  bait-and-switching.
+- **Native window by default**: `tessera app` opens a real window when
+  pywebview is available (browser fallback otherwise; `--browser` forces
+  the browser, `--window` insists). Release binaries now bundle pywebview
+  where it builds, with the browser as the universal fallback.
+- First-go polish: the run auto-jumps to Review when it completes, and the
+  guide line is clickable (jumps to the step that needs you).
+
+### Drilled (three full app sessions, real models, this machine)
+1. **First-go** on a fresh database: import a CSV + rubric → author 10
+   gold → Run auto-spawned the 4B ("picked by 24.0 GB unified memory") →
+   100% auto-applied @ 90% → auto-jump to Review → export.
+2. **SMS (300 items + curated gold)** imported and run at 95% through the
+   UI with the engine reused: 100% coverage, and the exported labels match
+   the hidden reference at **97.00% (96.67% unseen) — identical to the
+   decimal with the CLI-measured arms** (app-path parity).
+3. **Settings drill**: switched to forced 2B + propagation 0.95 in the ⚙
+   page → the engine actually swapped (4B stopped, 2B spawned), 4 members
+   propagated, promise held at 97.0% true vs the hidden reference.
+   The drills also caught and fixed a real crash (the settings panel's
+   strip-button lookup).
+
+### Tests
+232 (6 new: apply_saved typing/ignores, env-pins beat saved values,
+/api/settings shape, save-persist-reload via _load_saved, env-pinned
+fields skipped and reported, unknown-mode rejection + serving-status
+follows the mode).
+
 ## 0.18.0 — 2026-07-20
 
 ### Added

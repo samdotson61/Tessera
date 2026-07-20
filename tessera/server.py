@@ -49,6 +49,24 @@ class Context:
 def _serving_status(settings):
     """What model endpoint is configured, and does it answer? Honest and
     cheap: never claims 'connected' without a live reply."""
+    mode = getattr(settings, "model_mode", "auto")
+    if mode == "stub" and not settings.openai_url:
+        return {"provider": "stub (offline, chosen in settings)", "ok": True,
+                "note": "deterministic keyword labeler — fine for trying the loop"}
+    if mode == "custom" and not settings.openai_url:
+        if settings.custom_url:
+            return {"provider": f"custom ({settings.custom_url})", "ok": True,
+                    "note": "will be used on the next run"}
+        return {"provider": "custom endpoint", "ok": False,
+                "note": "no URL set — fill it in Settings"}
+    if mode in ("2b", "4b") and not settings.openai_url:
+        from .serving import plan_auto
+        plan = plan_auto(settings, force_tier=mode)
+        if plan:
+            return {"provider": f"winc qwen3.5-{mode} (forced in settings)",
+                    "ok": True, "note": "will start on first run"}
+        return {"provider": f"winc qwen3.5-{mode} (forced in settings)",
+                "ok": False, "note": f"no {mode.upper()} model file found in the winc install"}
     if settings.openai_url:
         base = settings.openai_url.split("/v1/")[0]
         url, provider = base + "/health", f"local ({settings.openai_url})"
@@ -170,6 +188,16 @@ def make_handler(ctx: Context):
                 report = build_quality_report(ctx.storage, ctx.dataset_id, ctx.taxonomy, ctx.last_gate)
                 return self._json({**to_dict(report),
                                    "runs": ctx.storage.get_runs(ctx.dataset_id, limit=12)})
+            if path == "/api/settings":
+                from .config import UI_SETTINGS, env_pins
+                from .serving import find_winc_assets
+                assets = find_winc_assets()
+                return self._json({
+                    "values": {f: getattr(ctx.settings, f) for f in UI_SETTINGS},
+                    "pins": env_pins(),
+                    "winc_tiers": sorted(assets["models"]) if assets else [],
+                    "db_path": os.path.abspath(ctx.settings.db_path),
+                })
             if path.startswith("/api/export/"):
                 return self._export(path[len("/api/export/"):])
             return self._json({"error": "not found"}, 404)
@@ -275,6 +303,9 @@ def make_handler(ctx: Context):
 
             if path == "/api/run":
                 return self._start_run(body)
+
+            if path == "/api/settings":
+                return self._save_settings(body)
 
             if path == "/api/bootstrap/start":
                 from .engine.goldset import cluster_sample
@@ -392,6 +423,37 @@ def make_handler(ctx: Context):
             ctx.taxonomy.version += 1
             ctx.storage.add_taxonomy(ctx.taxonomy)
             return self._json({"ok": True, "version": ctx.taxonomy.version})
+
+        def _save_settings(self, body):
+            from .config import UI_SETTINGS, apply_saved, env_pins
+            from . import serving
+            if ctx.run_state["running"]:
+                return self._json({"error": "a labeling run is in progress"}, 409)
+            changes = {k: v for k, v in dict(body).items() if k in UI_SETTINGS}
+            if not changes:
+                return self._json({"error": "nothing recognizable to save"}, 400)
+            mode = changes.get("model_mode")
+            if mode is not None and mode not in ("auto", "2b", "4b", "custom", "stub"):
+                return self._json({"error": f"unknown model_mode '{mode}'"}, 400)
+            pins = env_pins()
+            applied = {k: v for k, v in changes.items() if k not in pins}
+            skipped = {k: pins[k] for k in changes if k in pins}
+            # persist the merged saved-settings blob, then apply to the live settings
+            saved = json.loads(ctx.storage.get_kv("__app__", "ui_settings", "{}") or "{}")
+            saved.update(applied)
+            ctx.storage.set_kv("__app__", "ui_settings", json.dumps(saved))
+            apply_saved(ctx.settings, applied)
+            serving_fields = {"model_mode", "custom_url", "custom_model"}
+            if serving_fields & set(applied):
+                # a serving change must not keep labeling with the old engine
+                serving.stop()
+                ctx.settings.openai_url = os.environ.get("TESSERA_OPENAI_URL", "")
+                ctx.settings.provider = os.environ.get("TESSERA_PROVIDER", "stub")
+                ctx.settings.logprobs = os.environ.get(
+                    "TESSERA_LOGPROBS", "0") in ("1", "true", "yes")
+            return self._json({"ok": True, "applied": sorted(applied),
+                               "skipped_env_pinned": skipped,
+                               "serving": _serving_status(ctx.settings)})
 
         def _start_run(self, body):
             with ctx._run_lock:

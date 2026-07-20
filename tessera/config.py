@@ -26,6 +26,52 @@ def data_home() -> str:
     return os.path.join(base, "tessera")
 
 
+# Fields the Settings page may edit, with the env var that PINS each one
+# (an explicitly-set environment variable always beats a saved UI value —
+# predictable for CLI users, and the UI says so instead of silently losing).
+UI_SETTINGS = {
+    "model_mode": (None, str),        # pinned by provider/url env — see env_pins()
+    "custom_url": (None, str),
+    "custom_model": (None, str),
+    "workers": ("TESSERA_WORKERS", int),
+    "audit_rate": ("TESSERA_AUDIT_RATE", float),
+    "specialist": ("TESSERA_SPECIALIST", bool),
+    "propagate": ("TESSERA_PROPAGATE", float),
+    "autopilot": ("TESSERA_AUTOPILOT", bool),
+}
+
+
+def env_pins() -> dict:
+    """{field: env var} for every UI-editable field the environment has pinned."""
+    pins = {}
+    serving_env = next((v for v in ("TESSERA_PROVIDER", "TESSERA_OPENAI_URL",
+                                    "TESSERA_ANTHROPIC_URL")
+                        if os.environ.get(v)), None)
+    if os.environ.get("TESSERA_AUTOSERVE", "1") in ("0", "false", "no"):
+        serving_env = serving_env or "TESSERA_AUTOSERVE"
+    if serving_env:
+        pins["model_mode"] = serving_env
+    for field, (env, _t) in UI_SETTINGS.items():
+        if env is not None and env in os.environ:
+            pins[field] = env
+    return pins
+
+
+def apply_saved(settings, saved: dict):
+    """Overlay saved Settings-page values onto settings, skipping any field
+    the environment pins. Unknown fields and bad values are ignored."""
+    pins = env_pins()
+    for field, value in (saved or {}).items():
+        if field not in UI_SETTINGS or field in pins:
+            continue
+        _env, typ = UI_SETTINGS[field]
+        try:
+            setattr(settings, field, bool(value) if typ is bool else typ(value))
+        except (TypeError, ValueError):
+            continue
+    return settings
+
+
 def resolve_db(explicit=None) -> str:
     """Where the database lives, in order of authority: an explicit --db,
     TESSERA_DB, an existing ./tessera.db (project mode — a checkout keeps its
@@ -107,6 +153,11 @@ class Settings:
     autopilot: bool = False           # closed loop: audit-precision breaches tighten the gate
                                       # automatically (and recoveries relax it) — see docs/04
     autopilot_min_audits: int = 20    # audits required before the autopilot may adjust
+    model_mode: str = "auto"          # settings-page serving choice: "auto" (winc tier
+                                      # by memory) | "2b" | "4b" (forced winc tier) |
+                                      # "custom" (custom_url) | "stub" (offline)
+    custom_url: str = ""              # custom-mode openai-shaped /v1/chat/completions URL
+    custom_model: str = ""            # custom-mode model name (server-dependent)
     host: str = "127.0.0.1"
     port: int = 8080
 

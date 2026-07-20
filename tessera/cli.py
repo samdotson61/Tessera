@@ -41,6 +41,17 @@ def _apply_paths(settings, args):
             settings.cache_path = os.path.join(d, "tessera_cache.db")
 
 
+def _load_saved(storage, settings):
+    """Overlay the Settings-page values persisted in this database
+    (env-pinned fields keep their env values — config.apply_saved)."""
+    from .config import apply_saved
+    try:
+        saved = json.loads(storage.get_kv("__app__", "ui_settings", "{}") or "{}")
+    except (TypeError, ValueError):
+        saved = {}
+    apply_saved(settings, saved)
+
+
 def _taxonomy_for_dataset(storage, dataset_id):
     return appmod.taxonomy_for_dataset(storage, dataset_id)
 
@@ -257,6 +268,7 @@ def _prepare_app(args, settings):
     Returns (storage, dataset_id, taxonomy, gate, first_run)."""
     import dataclasses
     storage = Storage(settings.db_path)
+    _load_saved(storage, settings)
     rows = storage.conn.execute("SELECT id FROM datasets ORDER BY id").fetchall()
     datasets = [r["id"] for r in rows]
     first_run = False
@@ -305,13 +317,18 @@ def cmd_app(args):
     settings.port = _free_port(settings.host, args.port or settings.port)
     storage, dataset, taxonomy, gate, _ = _prepare_app(args, settings)
 
-    if args.window:
+    # A native window is the default app experience when pywebview is
+    # available; the browser is the universal fallback. --browser forces the
+    # browser; --window insists on a window (and says why when it can't).
+    want_window = args.window or not (args.browser or args.no_browser)
+    if want_window:
         try:
             import webview   # optional extra [app]
         except ImportError:
             webview = None
-            print("pywebview is not installed (`pip install tessera-label[app]`) "
-                  "— opening the default browser instead.")
+            if args.window:
+                print("pywebview is not installed (`pip install tessera-label[app]`) "
+                      "— opening the default browser instead.")
         if webview is not None:
             import threading
             from .server import Context, make_handler
@@ -347,6 +364,7 @@ def cmd_serve(args):
     if args.port:
         settings.port = args.port
     storage = Storage(settings.db_path)
+    _load_saved(storage, settings)
     taxonomy = _taxonomy_for_dataset(storage, args.dataset)
     if not taxonomy:
         print(f"no data for dataset '{args.dataset}'. Run `python -m tessera demo` first.")
@@ -404,9 +422,11 @@ def build_parser():
                    help="dataset to open (default: most recently gated; first run loads the sample)")
     a.add_argument("--port", type=int, default=None)
     a.add_argument("--window", action="store_true",
-                   help="native window via pywebview (pip install tessera-label[app])")
+                   help="insist on a native window (default when pywebview is installed)")
+    a.add_argument("--browser", action="store_true",
+                   help="open in the default browser instead of a window")
     a.add_argument("--no-browser", action="store_true",
-                   help="start the server without opening a browser")
+                   help="start the server without opening anything (headless)")
     a.set_defaults(func=cmd_app)
 
     rc = sub.add_parser("rubric-check",

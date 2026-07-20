@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tessera-label"
-version = "0.18.0"
+version = "0.19.0"
 description = "Cursor for data labeling — auto-label the easy majority at a guaranteed precision, route the rest to a human, and flywheel the corrections into your own models."
 readme = "README.md"
 requires-python = ">=3.10"
