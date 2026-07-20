@@ -51,10 +51,21 @@ record results here.
 
 ## Handoffs (Sam)
 
-1. **PyPI upload** (one time): create account/token at pypi.org, then
-   `pip install build twine && python -m build && twine upload dist/*`
-   from the repo root. Dist verified locally (wheel installs, `tessera demo`
-   passes from the wheel).
+1. **PyPI upload** (one time). The dist is BUILT and validated at 0.14.0 —
+   `dist/tessera_label-0.14.0-py3-none-any.whl` + `.tar.gz`, both pass
+   `twine check`, wheel re-verified in a clean venv (`tessera demo` and
+   `tessera app` both run from it). Remaining steps (2026-07-20):
+   1. Get an API token: https://pypi.org/manage/account/token/
+      (first upload needs an account-scoped token; you can re-scope to the
+      project afterwards).
+   2. From the repo root:
+      `python3 -m venv .pypi && .pypi/bin/pip install twine`
+      `.pypi/bin/twine upload dist/*`
+      (username `__token__`, password = the token, when prompted)
+   3. Then tag the release so CI attaches the three binaries:
+      `git tag v0.14.0 && git push --tags`
+   4. Tell Claude "PyPI is live" → README/one-pager install lines switch to
+      `pip install tessera-label`.
 2. **Windows smoke** (see table above).
 3. **T3 go/no-go** after the first partner engagement.
 
