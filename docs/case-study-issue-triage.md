@@ -117,7 +117,11 @@ broken.
 1. **Session zero is rubric calibration, not labeling.** Co-label 30–50 of
    the partner's own historically labeled items; reconcile every
    disagreement into rubric text. The 69.5% annotator-vs-authority gap was
-   invisible to every internal metric.
+   invisible to every internal metric. This is now a tool:
+   `tessera rubric-check --data theirs.csv --labels their_labels.csv
+   --taxonomy draft.json` prints the agreement, per-class breakdown, and the
+   disagreement patterns with examples — pointed at this rehearsal's corpus
+   it rediscovers the `question`-convention gap in one command.
 2. **The partner's conventions live in the rubric; gold sharpens what the
    rubric states.** Measured: convention-in-rubric moved coverage 11% →
    90.9%; gold alone couldn't (and under the broken model, gold under a

@@ -3,6 +3,33 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.13.0 — 2026-07-20
+
+The engagement kit: the case study's lessons become tools.
+
+### Added
+- **`tessera rubric-check`** (session zero): diff a DRAFT rubric against the
+  partner's own labeled history before any gold is authored — stratified
+  sample across *their* labels, agreement overall and per class, and the
+  disagreement patterns with example items (the kickoff agenda). Built from
+  the case study's lesson 1 (a careful annotator agreed with the label
+  authority only 69.5%, invisible to every internal metric). Self-validated
+  on the rehearsal corpus: it rediscovers the `question`-convention gap in
+  one command (their question class read at 15% under rubric v1), and caught
+  a v2 overcorrection the corpus-weighted analysis had masked (template-
+  styled work items maintainers label `bug` reading as feature-request).
+  Agreement is measured through the configured model, so it is a floor;
+  no-signal responses are surfaced with the serving-stack warning. Refuses
+  up front if their labels use classes the rubric lacks.
+- **Partner one-pager** (docs/partner-one-pager.md): the sendable pilot
+  pitch — measured results, what the pilot asks (kickoff + ~100 gold + a
+  labeled backlog as held-back truth), what the partner gets, the honesty
+  guarantee, and the local/$0 privacy story.
+
+### Tests
+197 (5 new: stratified coverage/determinism, convention-gap measurement +
+patterns, no-signal surfacing, CLI end-to-end + unknown-class guard).
+
 ## 0.12.1 — 2026-07-20
 
 The dress rehearsal (docs/case-study-issue-triage.md) caught a silent

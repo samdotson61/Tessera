@@ -33,6 +33,9 @@ python -m tessera label --data tessera/sample_data/intents.jsonl \
 
 # No gold yet? Author it first — a cluster-stratified sample, keyboard-first (cold start):
 python -m tessera bootstrap --data your.csv --taxonomy tax.json --dataset ds1 --n 100
+
+# Have labeled history? Check the rubric against it BEFORE labeling anything (session zero):
+python -m tessera rubric-check --data your.csv --labels their_labels.csv --taxonomy tax.json
 python -m tessera --db tessera.db report --dataset ds1
 python -m tessera --db tessera.db export --dataset ds1 --out labels.jsonl --pairs pairs.jsonl
 ```
@@ -401,7 +404,10 @@ beachhead label types** — classification, pairwise/preference, and span/NER
 (each producing a calibrated coverage@precision number, the Phase 1 exit
 criterion). The frontier comparison is done (Haiku 4.5 vs local Qwen, table
 above); the remaining Phase 0 ask is the same loop on a real *partner*
-dataset with curated gold — its dress rehearsal is done:
+dataset with curated gold — the engagement kit is ready (the
+[partner one-pager](docs/partner-one-pager.md) and `rubric-check`, the
+session-zero tool built from the rehearsal's main lesson) and the dress
+rehearsal is done:
 [the issue-triage case study](docs/case-study-issue-triage.md) ran the full
 engagement protocol on 438 VS Code issues against maintainer labels as
 held-back truth (findings: the annotator-vs-authority gap is the binding

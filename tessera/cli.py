@@ -2,6 +2,7 @@
 
     python -m tessera demo                 # run the whole loop on the bundled sample
     python -m tessera demo --serve         # ...then open the review UI
+    python -m tessera rubric-check --data d.csv --labels their.csv --taxonomy t.json
     python -m tessera bootstrap --data d.csv --taxonomy t.json   # author seed gold first
     python -m tessera label --data d.jsonl --taxonomy t.json [--gold g.jsonl]
     python -m tessera report --dataset demo
@@ -190,6 +191,32 @@ def cmd_bootstrap(args):
     return 0
 
 
+def cmd_rubric_check(args):
+    """Session zero: measure how well a DRAFT rubric reproduces the partner's
+    own labeling convention before any gold is authored (case study, lesson 1)."""
+    from .labelers import make_labelers
+    from .rubricfit import check, print_report
+    settings = Settings.from_env()
+    taxonomy = appmod.load_taxonomy(args.taxonomy)
+    if taxonomy.label_type == "span":
+        print("rubric-check supports classification/pairwise rubrics only.")
+        return 1
+    items = appmod.load_items(args.data, "rubricfit")
+    authority = {g.item_id: g.label
+                 for g in appmod.load_gold(args.labels, "rubricfit", items=items)}
+    unknown = sorted({lab for lab in authority.values()}
+                     - set(taxonomy.labels))
+    if unknown:
+        print(f"their labels use classes the rubric lacks: {unknown} — map or add "
+              "them first; agreement against a missing class is always zero.")
+        return 1
+    labelers = make_labelers(settings)
+    report = check(items, authority, taxonomy, labelers,
+                   n=args.n, workers=settings.workers)
+    print_report(report, items)
+    return 0
+
+
 def cmd_serve(args):
     settings = Settings.from_env()
     settings.db_path = args.db
@@ -246,6 +273,17 @@ def build_parser():
     e.add_argument("--out", default="labels.jsonl")
     e.add_argument("--pairs", help="also export flywheel training pairs to this path")
     e.set_defaults(func=cmd_export)
+
+    rc = sub.add_parser("rubric-check",
+                        help="session zero: diff a draft rubric against the partner's "
+                             "own labeled history (before any gold is authored)")
+    rc.add_argument("--data", required=True, help="their items JSONL/CSV ({id,text})")
+    rc.add_argument("--labels", required=True,
+                    help="their labels JSONL/CSV ({id,label}) — the authority")
+    rc.add_argument("--taxonomy", required=True, help="the DRAFT rubric JSON")
+    rc.add_argument("--n", type=int, default=100,
+                    help="sample size, stratified across their labels (default 100)")
+    rc.set_defaults(func=cmd_rubric_check)
 
     b = sub.add_parser("bootstrap",
                        help="author seed gold in the UI before any model runs (cold start)")
