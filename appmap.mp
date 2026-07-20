@@ -4,7 +4,7 @@ Living tracker for turning the CLI+browser MVP into an installable,
 multi-platform app. Update the boards below as construction proceeds —
 every state change gets a date. (Markdown-formatted; `.mp` = "map".)
 
-**North star:** `pip install tessera-label` (or download one file) →
+**North star:** one-liner installer (release binary, no Python required) →
 `tessera app` → the review UI opens — on macOS, Windows, and Linux.
 The native-shell tier ships only after a partner engagement proves demand.
 
@@ -15,7 +15,7 @@ The native-shell tier ships only after a partner engagement proves demand.
 | tier | what it is | status |
 |---|---|---|
 | **T1a — `tessera app`** | one command: pick/prepare a dataset, gate, start the server, open the browser (first run: offline sample demo) | **DONE 2026-07-20** |
-| **T1b — window mode** | `tessera app --window`: native window via pywebview (optional extra `[app]`), browser fallback with honest note | **BUILT 2026-07-20** — fallback path in place; native window untested (pywebview not installed on the dev box) |
+| **T1b — window mode** | `tessera app --window`: native window via pywebview (optional extra `[app]`), browser fallback with honest note | **DONE 2026-07-20** — native window launched + served on macOS (pywebview loop up, API live, clean exit); interactive click-through rides along with the Windows smoke |
 | **T1c — GitHub installer** | `curl \| sh` (macOS/Linux: release binary, pip-from-source fallback) + PowerShell one-liner (Windows) — no PyPI, no Python required on the binary path | **DONE 2026-07-20 — live-verified: binary path and pip-fallback path both E2E from the raw URL** |
 | ~~T1c-alt — PyPI release~~ | `pip install tessera-label` — dist builds clean and the wheel is verified, but Sam has no PyPI account | **DEFERRED by decision 2026-07-20** (GitHub installer instead; revisit if discoverability ever matters) |
 | **T2 — one-file binaries** | PyInstaller single-file `tessera` executables for macOS/Windows/Linux; CI matrix builds them on tag | **DONE 2026-07-20 — all 3 platforms built + smoke-passed in CI (run 29765123377); macOS also smoked locally end to end** |
@@ -29,10 +29,10 @@ The native-shell tier ships only after a partner engagement proves demand.
 | Linux | CI tests green (ubuntu runners) | same code path (webbrowser/socket are stdlib-portable) | **built + demo-smoked in CI (2026-07-20)** |
 | Windows | binary demo-smoked in CI (full offline loop through the .exe); interactive app session on real hardware still open | same code path | **built + demo-smoked in CI (2026-07-20)** |
 
-**Windows smoke = open item.** Sam has a Windows box (see
-`~/Claude/winc-windows-speed-tests.md` handoff pattern): install Python 3.11+,
-`pip install` the wheel from CI artifacts, run `tessera demo` + `tessera app`,
-record results here.
+**Windows smoke = open item (the last unverified cell).** On the Windows box:
+run the installer one-liner (`irm .../install.ps1 | iex`), then `tessera app`
+in a fresh terminal — confirm the browser opens, label a few sample items,
+re-run the installer once (upgrade-in-place check). Record results here.
 
 ## Idempotency & path contract (v0.16.0, verified)
 
@@ -87,6 +87,7 @@ we ever want it.)
 ## Next milestones
 
 - [x] Windows + Linux binary smoke via CI (2026-07-20, run 29765123377 — offline demo passes through all 3 binaries); interactive Windows session on real hardware still open
-- [ ] PyPI published → README/one-pager switch install lines to `pip install tessera-label`
+- [~] PyPI publish — DEFERRED by decision (see log); not blocking anything
+- [ ] Windows interactive smoke (handoff #1) — the one open verification
 - [ ] (T3, gated) native shell: process manager for llama-server, model
       download UI, auto-update, signing/notarization per OS
