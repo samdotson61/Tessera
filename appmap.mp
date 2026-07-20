@@ -16,7 +16,8 @@ The native-shell tier ships only after a partner engagement proves demand.
 |---|---|---|
 | **T1a — `tessera app`** | one command: pick/prepare a dataset, gate, start the server, open the browser (first run: offline sample demo) | **DONE 2026-07-20** |
 | **T1b — window mode** | `tessera app --window`: native window via pywebview (optional extra `[app]`), browser fallback with honest note | **BUILT 2026-07-20** — fallback path in place; native window untested (pywebview not installed on the dev box) |
-| **T1c — PyPI release** | `pip install tessera-label` — dist built + verified locally; **upload = Sam** (needs PyPI account/token) | **READY — handoff** |
+| **T1c — GitHub installer** | `curl \| sh` (macOS/Linux: release binary, pip-from-source fallback) + PowerShell one-liner (Windows) — no PyPI, no Python required on the binary path | **DONE 2026-07-20 — live-verified: binary path and pip-fallback path both E2E from the raw URL** |
+| ~~T1c-alt — PyPI release~~ | `pip install tessera-label` — dist builds clean and the wheel is verified, but Sam has no PyPI account | **DEFERRED by decision 2026-07-20** (GitHub installer instead; revisit if discoverability ever matters) |
 | **T2 — one-file binaries** | PyInstaller single-file `tessera` executables for macOS/Windows/Linux; CI matrix builds them on tag | **DONE 2026-07-20 — all 3 platforms built + smoke-passed in CI (run 29765123377); macOS also smoked locally end to end** |
 | **T3 — native shell** | signed/notarized app managing the Python backend + llama-server + model downloads (Sporeholm-launcher class) | **GATED — after first partner** |
 
@@ -48,26 +49,22 @@ record results here.
   binaries cover the "no Python on the machine" case. Revisit at T3.
 - **2026-07-20 — PyPI name is `tessera-label`** (`tessera` is squatted by an
   old Graphite dashboard).
+- **2026-07-20 — Distribution is GitHub-native, not PyPI.** Sam has no PyPI
+  account and doesn't want one; the install story is the release-binary
+  `curl | sh` / PowerShell one-liner (his house pattern — same as Jobfaro),
+  with pip-from-git as the documented alternative. PyPI deferred, not dead.
+- **2026-07-20 — North star amended accordingly:** one-liner installer →
+  `tessera app`, no Python required on the binary path.
 
 ## Handoffs (Sam)
 
-1. **PyPI upload** (one time). The dist is BUILT and validated at 0.14.0 —
-   `dist/tessera_label-0.14.0-py3-none-any.whl` + `.tar.gz`, both pass
-   `twine check`, wheel re-verified in a clean venv (`tessera demo` and
-   `tessera app` both run from it). Remaining steps (2026-07-20):
-   1. Get an API token: https://pypi.org/manage/account/token/
-      (first upload needs an account-scoped token; you can re-scope to the
-      project afterwards).
-   2. From the repo root:
-      `python3 -m venv .pypi && .pypi/bin/pip install twine`
-      `.pypi/bin/twine upload dist/*`
-      (username `__token__`, password = the token, when prompted)
-   3. Then tag the release so CI attaches the three binaries:
-      `git tag v0.14.0 && git push --tags`
-   4. Tell Claude "PyPI is live" → README/one-pager install lines switch to
-      `pip install tessera-label`.
-2. **Windows smoke** (see table above).
-3. **T3 go/no-go** after the first partner engagement.
+1. **Windows smoke** (see table above) — the installer one-liner
+   (`irm .../install.ps1 | iex`) plus an interactive `tessera app` session.
+2. **T3 go/no-go** after the first partner engagement.
+
+(PyPI upload was a handoff here until 2026-07-20; superseded by the GitHub
+installer — see the decisions log. The dist tooling stays in `[release]` if
+we ever want it.)
 
 ## Next milestones
 
