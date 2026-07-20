@@ -17,16 +17,16 @@ The native-shell tier ships only after a partner engagement proves demand.
 | **T1a — `tessera app`** | one command: pick/prepare a dataset, gate, start the server, open the browser (first run: offline sample demo) | **DONE 2026-07-20** |
 | **T1b — window mode** | `tessera app --window`: native window via pywebview (optional extra `[app]`), browser fallback with honest note | **BUILT 2026-07-20** — fallback path in place; native window untested (pywebview not installed on the dev box) |
 | **T1c — PyPI release** | `pip install tessera-label` — dist built + verified locally; **upload = Sam** (needs PyPI account/token) | **READY — handoff** |
-| **T2 — one-file binaries** | PyInstaller single-file `tessera` executables for macOS/Windows/Linux; CI matrix builds them on tag | **macOS built+smoked 2026-07-20; Win/Linux via CI** |
+| **T2 — one-file binaries** | PyInstaller single-file `tessera` executables for macOS/Windows/Linux; CI matrix builds them on tag | **DONE 2026-07-20 — all 3 platforms built + smoke-passed in CI (run 29765123377); macOS also smoked locally end to end** |
 | **T3 — native shell** | signed/notarized app managing the Python backend + llama-server + model downloads (Sporeholm-launcher class) | **GATED — after first partner** |
 
 ## Multi-platform status
 
 | platform | CLI + server | `tessera app` | binary |
 |---|---|---|---|
-| macOS (arm64) | tested (dev machine, CI 3.10–3.13) | live-verified in browser | built + smoked locally |
-| Linux | CI tests green (ubuntu runners) | same code path (webbrowser/socket are stdlib-portable) | CI build job |
-| Windows | untested end-to-end; code audit clean (no POSIX calls in package; static-path guard handles drive letters) | same code path | CI build job |
+| macOS (arm64) | tested (dev machine, CI 3.10–3.13) | live-verified in browser | **built + demo-smoked in CI and locally** |
+| Linux | CI tests green (ubuntu runners) | same code path (webbrowser/socket are stdlib-portable) | **built + demo-smoked in CI (2026-07-20)** |
+| Windows | binary demo-smoked in CI (full offline loop through the .exe); interactive app session on real hardware still open | same code path | **built + demo-smoked in CI (2026-07-20)** |
 
 **Windows smoke = open item.** Sam has a Windows box (see
 `~/Claude/winc-windows-speed-tests.md` handoff pattern): install Python 3.11+,
@@ -60,7 +60,7 @@ record results here.
 
 ## Next milestones
 
-- [ ] Windows + Linux binary smoke from CI artifacts
+- [x] Windows + Linux binary smoke via CI (2026-07-20, run 29765123377 — offline demo passes through all 3 binaries); interactive Windows session on real hardware still open
 - [ ] PyPI published → README/one-pager switch install lines to `pip install tessera-label`
 - [ ] (T3, gated) native shell: process manager for llama-server, model
       download UI, auto-update, signing/notarization per OS
