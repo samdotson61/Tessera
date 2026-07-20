@@ -50,6 +50,14 @@ consensus @90 = 93.5% @ 92.78% TRUE / 92.71% unseen and 4B plain @90 = 64.0%
 88.5% reproduce; 2B consensus @90 = 49.5% @ 97.98% / 96.97% (one
 threshold-adjacent item vs the shipped 49.8%) and @85 identical.**
 
+**SMS on the fixed 2B (2026-07-20, propagation 0.95, hidden reference,
+zero no-signal):** the economy tier alone remains promise-breaking (plain
+@90 = 59.0% coverage @ 78.0% true; @95 honestly refuses), and consensus
+fixes it for real this time: **@90 = 100% coverage @ 93.0% true (92.5%
+unseen); @95 = 87.0% coverage @ 98.9% true (99.0% unseen)** — on the 2B the
+95% target is the sweet spot (13% coverage buys ~6 points of precision).
+All 4 propagated near-duplicate members match the hidden reference.
+
 ## 0.12.0 — 2026-07-20
 
 Partner-prep: the three builds that make the loop runnable on data we didn't
