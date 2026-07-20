@@ -8,6 +8,9 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+permissions:
+  contents: write   # gh release create/upload needs it; default token is read-only
+
 jobs:
   binary:
     strategy:
