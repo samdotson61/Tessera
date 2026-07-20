@@ -214,7 +214,7 @@ def serve(storage, dataset_id, taxonomy, settings, gate_result=None,
     mode = "gold bootstrap" if bootstrap_ids else "review UI"
     url = f"http://{settings.host}:{settings.port}"
     print(f"Tessera {mode}  ->  {url}")
-    print("Ctrl+C to stop.")
+    print("Ctrl+C to stop.", flush=True)
     if on_ready is not None:
         on_ready(url)   # socket is already bound; safe to open a browser at it
     try:

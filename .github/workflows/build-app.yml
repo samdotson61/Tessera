@@ -45,6 +45,12 @@ jobs:
         shell: bash
         run: |
           ./dist/tessera* --db smoke.db demo | grep "AUTO-LABELED"
+      - name: Syntax-check install.ps1 (Windows only)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          [scriptblock]::Create((Get-Content -Raw install.ps1)) | Out-Null
+          Write-Host "install.ps1 parses"
       - name: Rename artifact
         shell: bash
         run: |

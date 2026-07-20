@@ -30,6 +30,14 @@ tessera app        # server + review UI in one step
 First run loads the bundled sample **offline** (the deterministic stub — no
 model or API is called by double-clicking anything); after that, `tessera
 app` reopens your most recently gated dataset at its own target.
+
+**Where your data lives** (printed on every `tessera app` start): explicit
+`--db` → `TESSERA_DB` → an existing `./tessera.db` (project mode) → the
+per-user data home (`~/Library/Application Support/Tessera` on macOS,
+`%LOCALAPPDATA%\Tessera` on Windows, `$XDG_DATA_HOME/tessera` on Linux;
+`TESSERA_HOME` overrides). Launching from a different directory opens the
+same data — no paths are hardcoded, and re-running the installer upgrades
+in place, even while Tessera is running.
 `--window` gives a native window with the `[app]` extra installed;
 one-file binaries for macOS/Linux/Windows build on every release tag
 (`.github/workflows/build-app.yml`) — construction status in

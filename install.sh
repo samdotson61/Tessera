@@ -31,8 +31,13 @@ if [ -n "$asset" ]; then
   url="https://github.com/$REPO/releases/latest/download/$asset"
   echo "tessera: downloading the prebuilt binary ($asset) from the latest release..."
   mkdir -p "$BIN_DIR"
-  if curl -fsSL "$url" -o "$BIN_DIR/tessera"; then
-    chmod +x "$BIN_DIR/tessera"
+  # download to a temp file and rename atomically: re-installing over a
+  # RUNNING tessera stays safe (overwriting a busy executable fails with
+  # ETXTBSY on Linux; a rename swaps the inode instead)
+  tmp="$BIN_DIR/.tessera.download.$$"
+  if curl -fsSL "$url" -o "$tmp"; then
+    chmod +x "$tmp"
+    mv -f "$tmp" "$BIN_DIR/tessera"
     "$BIN_DIR/tessera" --help >/dev/null
     echo "tessera: installed the binary to $BIN_DIR/tessera"
     path_note
@@ -40,6 +45,7 @@ if [ -n "$asset" ]; then
     echo "next:  tessera app     (opens the review UI; first run loads an offline sample)"
     exit 0
   fi
+  rm -f "$tmp"
   echo "tessera: release download failed — falling back to a pip install from source."
 else
   echo "tessera: no prebuilt binary for $OS/$ARCH — installing from source (needs Python 3.10+)."
@@ -52,11 +58,14 @@ if ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) e
   exit 1
 fi
 
-VENV="$HOME/.tessera/venv"
+VENV="${TESSERA_HOME:-$HOME/.tessera}/venv"
 echo "tessera: creating $VENV and installing from GitHub..."
 python3 -m venv "$VENV"
 "$VENV/bin/pip" install --quiet --upgrade pip >/dev/null 2>&1 || true
-"$VENV/bin/pip" install --quiet "git+https://github.com/$REPO.git"
+# --force-reinstall: re-running the installer always lands the CURRENT main,
+# even when the version number hasn't changed (idempotent upgrade)
+"$VENV/bin/pip" install --quiet --force-reinstall --no-deps \
+  "git+https://github.com/$REPO.git"
 mkdir -p "$BIN_DIR"
 ln -sf "$VENV/bin/tessera" "$BIN_DIR/tessera"
 "$BIN_DIR/tessera" --help >/dev/null

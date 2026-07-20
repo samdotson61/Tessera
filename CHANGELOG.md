@@ -3,6 +3,40 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.16.0 — 2026-07-20
+
+Idempotency + path-portability pass, install to use, all three platforms.
+
+### Changed
+- **Per-user data home; launch from anywhere.** The database now resolves:
+  explicit `--db` → `TESSERA_DB` → an existing `./tessera.db` (project mode
+  — a checkout keeps its data local) → the platform data home
+  (`%LOCALAPPDATA%\Tessera`, `~/Library/Application Support/Tessera`,
+  `$XDG_DATA_HOME/tessera`), overridable with `TESSERA_HOME`. `tessera app`
+  from two different directories now opens the SAME data (drilled live);
+  previously the db silently followed the working directory. The app prints
+  `data: <path>` on every start — never a mystery where your labels live.
+  `TESSERA_DB` was previously read but always clobbered by the `--db`
+  default — now honored. The default response cache sits beside the
+  resolved db instead of scattering into the cwd (explicit `TESSERA_CACHE`
+  wins).
+- **Installers are upgrade-safe and re-runnable.** install.sh downloads to
+  a temp file and renames atomically (re-installing over a RUNNING tessera
+  no longer hits ETXTBSY on Linux), and the pip fallback force-reinstalls
+  so a re-run always lands current main; `TESSERA_HOME` also relocates the
+  fallback venv. install.ps1 uses the rename-the-running-exe dance
+  (Windows locks running executables against overwrite, not rename),
+  `$env:TESSERA_DIR` overrides the install dir, and the PATH append guards
+  the fresh-machine null case. Windows job now syntax-checks install.ps1.
+- Startup prints flush immediately (visible when piped/logged); the CLI
+  no-signal hint now names the fix that actually works
+  (`enable_thinking:false` — not `--reasoning-budget 0`).
+
+### Tests
+212 (10 new: data-home per platform incl. TESSERA_HOME/XDG/LOCALAPPDATA,
+db resolution order, data-home creation on demand, cache colocation with
+explicit-cache override).
+
 ## 0.15.0 — 2026-07-20
 
 ### Added

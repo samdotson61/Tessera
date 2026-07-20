@@ -28,7 +28,7 @@ The single load-bearing idea: **the coverage@precision harness gates everything.
 
 ## 1a. Build status (July 2026)
 
-**Phase 0 (Wedge) and most of Phase 1 (Trust) are built and shipped** — github.com/samdotson61/Tessera (public), 202 passing tests + CI (v0.14.0). What actually shipped, and where it diverged from the plan below:
+**Phase 0 (Wedge) and most of Phase 1 (Trust) are built and shipped** — github.com/samdotson61/Tessera (public), 212 passing tests + CI (v0.16.0; v0.15 GitHub-native installers, v0.16 idempotency/path-portability pass — per-user data home, launch-from-anywhere, upgrade-safe installers; contract in `appmap.mp`). What actually shipped, and where it diverged from the plan below:
 
 - **Built (Phase 0, June 2026):** the full loop (ingest → ensemble labelers → calibration → coverage@precision gate → keyboard-first review UI → flywheel event log → export), the gold-set harness, the adjustable precision slider, and the per-dataset quality report.
 - **Built (Phase 1, July 2026):** production-shaped LLM labeling (self-consistency sampling, response cache, retries, concurrency, optional two-family ensemble); the **LLM-as-judge verification pass** (different-family, veto-only, fail-open); the **pairwise/preference label type** end-to-end (second of the three beachhead types); **gold-set growth from human corrections** (source-tracked, seed gold immutable); **bootstrap 95% CIs on coverage@precision** computed on the out-of-fold CV values; **undo** in the review loop; the **quality-report panel with a reliability diagram** in the UI; and the **coverage@precision regression gate wired into CI** (engineering principle #1 made enforceable).

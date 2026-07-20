@@ -2,7 +2,45 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
+
+
+def data_home() -> str:
+    """Per-user Tessera data directory, by platform convention.
+
+    TESSERA_HOME overrides; else %LOCALAPPDATA%\\Tessera (Windows),
+    ~/Library/Application Support/Tessera (macOS), $XDG_DATA_HOME/tessera or
+    ~/.local/share/tessera (Linux). Never hardcoded — derived per user."""
+    override = os.environ.get("TESSERA_HOME")
+    if override:
+        return override
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+        return os.path.join(base, "Tessera")
+    if sys.platform == "darwin":
+        return os.path.expanduser(os.path.join("~", "Library",
+                                               "Application Support", "Tessera"))
+    base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser(
+        os.path.join("~", ".local", "share"))
+    return os.path.join(base, "tessera")
+
+
+def resolve_db(explicit=None) -> str:
+    """Where the database lives, in order of authority: an explicit --db,
+    TESSERA_DB, an existing ./tessera.db (project mode — a checkout keeps its
+    data local), else the per-user data home (app mode — the same data no
+    matter which directory you launch from)."""
+    if explicit:
+        return explicit
+    env = os.environ.get("TESSERA_DB")
+    if env:
+        return env
+    if os.path.exists("tessera.db"):
+        return "tessera.db"
+    home = data_home()
+    os.makedirs(home, exist_ok=True)
+    return os.path.join(home, "tessera.db")
 
 
 def load_dotenv(path: str = ".env") -> None:

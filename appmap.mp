@@ -34,6 +34,24 @@ The native-shell tier ships only after a partner engagement proves demand.
 `pip install` the wheel from CI artifacts, run `tessera demo` + `tessera app`,
 record results here.
 
+## Idempotency & path contract (v0.16.0, verified)
+
+- **No hardcoded paths.** Db resolution: `--db` → `TESSERA_DB` →
+  `./tessera.db` if present (project mode) → platform data home
+  (`TESSERA_HOME` overrides): `%LOCALAPPDATA%\Tessera` /
+  `~/Library/Application Support/Tessera` / `$XDG_DATA_HOME/tessera`.
+  Cache sits beside the resolved db. `tessera app` prints `data: <path>`
+  every start. Unit-tested per platform; cwd-independence drilled live
+  (two directories, same data, no re-bootstrap).
+- **Installers re-run clean and upgrade in place.** sh: temp + atomic
+  rename (safe over a running binary — no ETXTBSY), pip fallback
+  force-reinstalls (re-run = current main), `TESSERA_BIN`/`TESSERA_HOME`
+  relocate everything. ps1: rename-running-exe dance, `$env:TESSERA_DIR`
+  override, null-PATH guard; syntax-checked in the Windows CI job.
+- **App re-runs are stable.** First-run demo happens once (dataset
+  presence, not a marker file); busy ports get a new port, not a crash;
+  re-gates always re-derive from stored state.
+
 ## Decisions log
 
 - **2026-07-20 — Browser-first, window optional.** The core app experience is

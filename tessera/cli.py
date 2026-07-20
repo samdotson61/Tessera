@@ -17,7 +17,7 @@ import json
 import os
 import sys
 
-from .config import Settings
+from .config import Settings, resolve_db
 from .labelers.judge import make_judge
 from .storage import Storage
 from .schemas import to_dict
@@ -27,6 +27,18 @@ from .quality import build_quality_report
 from .export import export_jsonl
 from .flywheel import export_training_pairs
 from .server import serve
+
+
+def _apply_paths(settings, args):
+    """Resolve the database (see config.resolve_db) and keep the default
+    cache file beside it, so app-mode state never scatters across working
+    directories. Explicit TESSERA_CACHE always wins."""
+    settings.db_path = resolve_db(getattr(args, "db", None))
+    if ("TESSERA_CACHE" not in os.environ
+            and settings.cache_path == "tessera_cache.db"):
+        d = os.path.dirname(settings.db_path)
+        if d:
+            settings.cache_path = os.path.join(d, "tessera_cache.db")
 
 
 def _taxonomy_for_dataset(storage, dataset_id):
@@ -75,14 +87,15 @@ def _print_summary(gate, taxonomy=None):
     if gate.n_no_signal:
         print(f"  !! NO SIGNAL     : {gate.n_no_signal} item(s) had a labeler return an "
               f"error/empty answer — if this is a large share, fix the serving stack "
-              f"(reasoning mode? llama-server: --reasoning-budget 0)")
+              "(reasoning mode? llama-server: "
+              "--chat-template-kwargs '{\"enable_thinking\":false}')")
     print(f"\n  >> Auto-labeled {pct}% of the data at >= {gate.target_precision:.0%} precision; "
           f"a human only touches the remaining {gate.n_queue}.")
 
 
 def cmd_demo(args):
     settings = Settings.from_env()
-    settings.db_path = args.db
+    _apply_paths(settings, args)
     storage = Storage(settings.db_path)
     sample = "pairwise" if args.pairwise else ("span" if args.span else "intents")
     taxonomy, gate = appmod.bootstrap_demo(storage, settings,
@@ -99,7 +112,7 @@ def cmd_demo(args):
 
 def cmd_label(args):
     settings = Settings.from_env()
-    settings.db_path = args.db
+    _apply_paths(settings, args)
     if args.target is not None:
         settings.target_precision = args.target
     storage = Storage(settings.db_path)
@@ -114,7 +127,7 @@ def cmd_label(args):
 
 def cmd_report(args):
     settings = Settings.from_env()
-    settings.db_path = args.db
+    _apply_paths(settings, args)
     storage = Storage(settings.db_path)
     taxonomy = _taxonomy_for_dataset(storage, args.dataset)
     if not taxonomy:
@@ -143,7 +156,7 @@ def cmd_report(args):
 
 def cmd_export(args):
     settings = Settings.from_env()
-    settings.db_path = args.db
+    _apply_paths(settings, args)
     storage = Storage(settings.db_path)
     n = export_jsonl(storage, args.dataset, args.out)
     print(f"exported {n} finalized labels -> {args.out}")
@@ -162,7 +175,7 @@ def cmd_bootstrap(args):
     The labels land as gold (source 'bootstrap'); then run `label` as usual."""
     from .engine.goldset import cluster_sample
     settings = Settings.from_env()
-    settings.db_path = args.db
+    _apply_paths(settings, args)
     if args.port:
         settings.port = args.port
     storage = Storage(settings.db_path)
@@ -282,7 +295,8 @@ def cmd_app(args):
     open the UI — default browser everywhere; --window uses a native window
     when pywebview is installed (`pip install tessera-label[app]`)."""
     settings = Settings.from_env()
-    settings.db_path = args.db
+    _apply_paths(settings, args)
+    print(f"data: {settings.db_path}", flush=True)   # never a mystery where your labels live
     settings.port = _free_port(settings.host, args.port or settings.port)
     storage, dataset, taxonomy, gate, _ = _prepare_app(args, settings)
 
@@ -324,7 +338,7 @@ def cmd_app(args):
 
 def cmd_serve(args):
     settings = Settings.from_env()
-    settings.db_path = args.db
+    _apply_paths(settings, args)
     if args.port:
         settings.port = args.port
     storage = Storage(settings.db_path)
@@ -347,7 +361,8 @@ def cmd_serve(args):
 
 def build_parser():
     p = argparse.ArgumentParser(prog="tessera", description="Cursor for data labeling (MVP).")
-    p.add_argument("--db", default="tessera.db", help="SQLite db path")
+    p.add_argument("--db", default=None,
+                   help="SQLite db path (default: TESSERA_DB, else ./tessera.db if present, else the per-user data home)")
     sub = p.add_subparsers(dest="command", required=True)
 
     d = sub.add_parser("demo", help="run the full loop on the bundled sample dataset")
