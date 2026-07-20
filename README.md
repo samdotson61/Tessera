@@ -263,16 +263,18 @@ actually ran at; corrections still flow to gold, and with the specialist on,
 every run retrains it — drift pulls humans back in instead of silently
 poisoning labels.
 
-**The loop, demonstrated live (SMS 300, hidden reference):** the plain
-logprob head at a 90% target over-promised — 100% coverage at 85.3% true.
-Consensus caught it in-flight (85.7% coverage at 89.9% true, the 43
-promise-breaking items routed; all 4 propagated members matched the
-reference). And on the over-promising config, working the 93-item audit
-slice (86.0% confirmed) made the system un-ship the broken promise on its
-own: the autopilot rightly held its level — 86% over 93 audits is not
-95%-confident breach evidence — but the 13 corrections entered gold and the
-re-gate collapsed coverage to 0.3%, an honest refusal. Defense in depth:
-gold growth is the first responder, the autopilot the backstop.
+**The loop, demonstrated live (SMS 300, hidden reference — corrected in
+v0.12.1):** on a healthy serving stack the local 4B logprob head labels all
+300 SMS at **95.7% true, and with consensus 100% coverage at 97.0% true
+(96.7% unseen), at both the 90% and 95% targets**. The original v0.10.0
+session unknowingly ran against a mute model (empty reasoning-mode answers;
+see the CHANGELOG erratum) — and the safety stack contained it exactly as
+designed: consensus routed what the dead signal couldn't support, a 93-item
+audit slice (86.0% confirmed) fed corrections to gold, and the re-gate
+collapsed the broken config's coverage to 0.3% while the autopilot rightly
+held its level (86% over 93 audits is not 95%-confident breach evidence).
+Defense in depth, demonstrated against a real failure nobody had noticed —
+and v0.12.1's no-signal guard now notices.
 
 The frontier comparison (2026-07-17) added three more lessons:
 
@@ -325,6 +327,16 @@ reference noise). Working lesson that shipped as guidance: size the audit
 sample by *count*, not rate — 10 audited items cannot detect a ~7% error
 rate (~46% chance of seeing zero errors).
 
+**Reasoning-model serving note (load-bearing):** the logprob head reads the
+FIRST answer token, so the serving stack must not let the model deliberate
+first. Qwen3.5 on a raw llama-server verbalizes reasoning on longer items —
+empty `content`, first token literally "Thinking" — which turns the labeler
+into a silent uniform voter (`--reasoning-budget 0` and `/no_think` do NOT
+stop the prose variant; measured). Serve with
+`--chat-template-kwargs '{"enable_thinking":false}'`. Tessera v0.12.1 counts
+these dud responses per run (`n_no_signal`) and the report screams when the
+share is meaningful — a mute labeler must never look like a quiet success.
+
 Footprint note: labeling prompts are ~500-700 tokens end-to-end, so a tiny
 context window is all a labeling endpoint needs. With winc.cpp ≥ v1.26.0, set
 `context = "2048"` in winc.toml and the pin is honored exactly — measured
@@ -370,7 +382,13 @@ beachhead label types** — classification, pairwise/preference, and span/NER
 (each producing a calibrated coverage@precision number, the Phase 1 exit
 criterion). The frontier comparison is done (Haiku 4.5 vs local Qwen, table
 above); the remaining Phase 0 ask is the same loop on a real *partner*
-dataset with curated gold. Phase 2 (Loop) has begun: run-over-run
+dataset with curated gold — its dress rehearsal is done:
+[the issue-triage case study](docs/case-study-issue-triage.md) ran the full
+engagement protocol on 438 VS Code issues against maintainer labels as
+held-back truth (findings: the annotator-vs-authority gap is the binding
+risk; the rubric carries the customer's convention — 11%→90.9% coverage from
+one rewritten paragraph; and the harness caught a silently mute model,
+leaving the no-signal guard behind). Phase 2 (Loop) has begun: run-over-run
 instrumentation ships, and the cluster router was built and A/B'd — the
 harness kept confidence-first as default (21 vs 17 errors found at equal
 budgets). The v0.10.0 automation pass added the consensus gate, near-

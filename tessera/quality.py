@@ -75,6 +75,16 @@ def build_quality_report(storage, dataset_id, taxonomy, gate_result):
                        f"the target, so the gate ran at an effective target of "
                        f"{gate_result.effective_target:.1%} (allowed error halved per level). "
                        "Coverage reflects the tightened gate.")
+    if gate_result.n_no_signal:
+        share = gate_result.n_no_signal / max(1, len(preds))
+        line = (f"{gate_result.n_no_signal} item(s) ({share:.0%}) had a labeler return NO "
+                "usable signal (error or empty answer).")
+        if share > 0.05:
+            line += (" CHECK THE SERVING STACK before trusting this run — a reasoning-mode "
+                     "model can answer with empty content on every long item while the "
+                     "remaining ensemble members keep the numbers looking plausible "
+                     "(llama-server: --reasoning-budget 0).")
+        caveats.append(line)
     if gate_result.n_judge_vetoed:
         caveats.append(f"LLM judge vetoed {gate_result.n_judge_vetoed} auto-apply candidate(s) "
                        "to the human queue; reported coverage is post-veto.")
@@ -103,4 +113,5 @@ def build_quality_report(storage, dataset_id, taxonomy, gate_result):
         n_propagated=gate_result.n_propagated,
         autopilot_level=gate_result.autopilot_level,
         effective_target=gate_result.effective_target,
+        n_no_signal=gate_result.n_no_signal,
         caveats=caveats)

@@ -21,11 +21,22 @@ from .engine.gating import apply_gate
 from .flywheel import audit_stats
 
 
+_NO_SIGNAL = ("LLM error:", "no label mass in logprobs", "logprobs unavailable")
+
+
 def _predict_item(it, dataset_id, taxonomy, labelers):
     outputs = [lab.label(it, taxonomy) for lab in labelers]
     label, raw, agreement, votes, dist = conf_mod.ensemble(outputs)
     violations = deterministic_checks(label, taxonomy, item=it)
     rationale = outputs[0].rationale if outputs else ""
+    # A labeler that errored or whose answer carried no label signal returned
+    # a uniform distribution — the ensemble silently runs on the remaining
+    # members. Mark it loudly: a high no-signal share means the serving stack
+    # is broken (measured: a reasoning-mode model answered 434/438 items with
+    # empty content and every downstream number looked plausible).
+    dead = sum(1 for o in outputs if any(m in (o.rationale or "") for m in _NO_SIGNAL))
+    if dead:
+        rationale = f"[{dead}/{len(outputs)} labelers no-signal] {rationale}"
     if violations:
         # A failed rubric check forces the item to a human regardless of model confidence.
         raw = 0.0
@@ -255,6 +266,7 @@ def calibrate_and_gate(storage, dataset_id, taxonomy, target_precision, settings
     n_auto = sum(1 for p in preds if p.auto_applied)
     n_queue = sum(1 for p in preds if p.routed)
     full_coverage = n_auto / len(preds) if preds else 0.0
+    n_no_signal = sum(1 for p in direct if "labelers no-signal]" in (p.rationale or ""))
 
     if log_events:
         storage.delete_auto_events(dataset_id)  # idempotent: replace prior auto events
@@ -279,7 +291,8 @@ def calibrate_and_gate(storage, dataset_id, taxonomy, target_precision, settings
         cross_validated=cross_validated, n_judge_vetoed=n_vetoed,
         n_audit_pending=n_audit, coverage_ci=(list(ci) if ci else None),
         n_propagated=n_propagated, autopilot_level=level,
-        effective_target=(effective_target if level else None))
+        effective_target=(effective_target if level else None),
+        n_no_signal=n_no_signal)
     if log_events:
         # Run-over-run instrumentation (docs/08 Phase 2): coverage up, human
         # effort down — every gating run appends one row.

@@ -70,6 +70,10 @@ def _print_summary(gate, taxonomy=None):
     if gate.autopilot_level:
         print(f"  AUTOPILOT        : level {gate.autopilot_level} — audit breach; gating at "
               f"{gate.effective_target:.2%} effective target")
+    if gate.n_no_signal:
+        print(f"  !! NO SIGNAL     : {gate.n_no_signal} item(s) had a labeler return an "
+              f"error/empty answer — if this is a large share, fix the serving stack "
+              f"(reasoning mode? llama-server: --reasoning-budget 0)")
     print(f"\n  >> Auto-labeled {pct}% of the data at >= {gate.target_precision:.0%} precision; "
           f"a human only touches the remaining {gate.n_queue}.")
 

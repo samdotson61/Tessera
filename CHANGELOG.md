@@ -3,6 +3,48 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.12.1 — 2026-07-20
+
+The dress rehearsal (docs/case-study-issue-triage.md) caught a silent
+serving defect and left a permanent guard behind.
+
+### Added
+- **No-signal guard**: every labeler response that carries no usable signal
+  (error, or an empty/reasoning-prose answer with no label mass) is now
+  marked on the prediction (`[k/n labelers no-signal]`), counted per gate
+  (`GateResult.n_no_signal`), surfaced in the report/CLI, and the report
+  CHECK-THE-SERVING-STACK-screams when the share is meaningful. Built after
+  measuring a run where 434/438 responses were empty and every downstream
+  number still looked plausible (the consensus specialist silently carried
+  the whole ensemble).
+- **Issue-triage case study** (docs/case-study-issue-triage.md): the full
+  partner-protocol rehearsal on 438 VS Code issues with maintainer labels as
+  held-back truth — annotator-vs-authority gap measured (69.5%), the rubric
+  shown to carry the customer's convention (11% → 90.9% coverage with
+  partner gold once the convention was written into one paragraph), and the
+  consensus gate confirmed as the coverage lever on a working model (LLM
+  alone: honest 0%; with the specialist: 90.9%).
+- `scripts/fetch_github_issues.py`: build a triage corpus + held-back truth
+  from any public repo's maintainer labels (stdlib, GITHUB_TOKEN optional).
+- README serving recipe: Qwen3.5 on raw llama-server needs
+  `--chat-template-kwargs '{"enable_thinking":false}'` for the logprob head;
+  `--reasoning-budget 0` and `/no_think` do NOT stop the prose-thinking
+  variant (measured — first generated token was literally "Thinking").
+
+### ERRATUM — v0.10.0 SMS measurements
+The v0.10.0 "Measured (SMS 300, live 4B logprob run)" numbers were taken
+under this serving defect: the LLM returned empty answers on all SMS items,
+so "plain logprob @90 = 100% coverage @ 85.3% true" actually measured a
+constant-majority-class labeler (85.3% = the ham base rate), and the
+consensus figures measured the specialist alone. **Corrected (fixed stack,
+same hidden reference): plain logprob @90 = 100% coverage @ 95.7% true
+(95.8% unseen); with consensus = 100% @ 97.0% (96.7% unseen) — at the 95%
+target as well.** What the v0.10.0 session *actually* demonstrated is that
+the safety stack (consensus routing, audit sampling, gold-growth collapse)
+correctly contained a broken labeler nobody knew was broken. The AG News and
+intents results are unaffected (their cached responses were audited: 0 empty
+— short items never triggered reasoning mode).
+
 ## 0.12.0 — 2026-07-20
 
 Partner-prep: the three builds that make the loop runnable on data we didn't
@@ -117,6 +159,9 @@ supervises rather than works.
   tests and the factor scales with real corpus redundancy.
 
 ### Measured (SMS 300, live 4B logprob run, hidden reference)
+**[SUPERSEDED — see the 0.12.1 erratum: these numbers were measured under a
+serving defect that muted the LLM; the corrected SMS numbers are far
+stronger. Kept as originally published.]**
 - The logprob head alone at a 90% target over-promises on this task: 100%
   coverage at 85.3% TRUE. **Consensus catches it: 85.7% coverage at 89.9%
   TRUE (88.6% unseen)** — the co-signal routed the 43 items that broke the

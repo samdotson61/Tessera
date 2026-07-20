@@ -212,6 +212,8 @@ class GateResult:
     n_propagated: int = 0           # near-duplicate members carrying their representative's label
     autopilot_level: int = 0        # 0 = gate at the base target; each level halves allowed error
     effective_target: Optional[float] = None   # tightened target actually gated at (autopilot)
+    n_no_signal: int = 0            # items where >=1 labeler returned no usable signal
+                                    # (error/empty answer) — high share = broken serving stack
 
 
 @dataclass
@@ -236,6 +238,7 @@ class QualityReport:
     n_propagated: int = 0                 # labels carried by near-duplicate propagation
     autopilot_level: int = 0              # current autopilot tightening level (0 = base target)
     effective_target: Optional[float] = None  # tightened target the gate actually ran at
+    n_no_signal: int = 0                  # items where >=1 labeler returned no usable signal
     caveats: list = field(default_factory=list)
     generated_at: str = field(default_factory=now_iso)
 
