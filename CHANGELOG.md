@@ -43,7 +43,12 @@ target as well.** What the v0.10.0 session *actually* demonstrated is that
 the safety stack (consensus routing, audit sampling, gold-growth collapse)
 correctly contained a broken labeler nobody knew was broken. The AG News and
 intents results are unaffected (their cached responses were audited: 0 empty
-— short items never triggered reasoning mode).
+— short items never triggered reasoning mode). **Confirmed by live rerun on
+the fixed stack (2026-07-20, fresh caches, zero no-signal responses): 4B
+consensus @90 = 93.5% @ 92.78% TRUE / 92.71% unseen and 4B plain @90 = 64.0%
+@ 94.14% / 97.22% reproduce to the decimal; @95 refusal and @85 = 100% @
+88.5% reproduce; 2B consensus @90 = 49.5% @ 97.98% / 96.97% (one
+threshold-adjacent item vs the shipped 49.8%) and @85 identical.**
 
 ## 0.12.0 — 2026-07-20
 
