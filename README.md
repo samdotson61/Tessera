@@ -233,6 +233,25 @@ sharpens the signal, it does not manufacture precision the dataset's label
 noise can't support. (2B @ 85% holds in aggregate but its unseen split dips
 to 82.8% — prefer 2B @ 90% or a 4B tier.)
 
+The same lever on the SMS dogfood task (300 items, hidden reference, fixed
+serving stack, near-duplicate propagation on — all 4 propagated members
+match the reference):
+
+| run | target | coverage | true (all auto) | true (unseen) |
+|---|---|---|---|---|
+| 2B logprob alone | 90% | 59.0% | 78.0% — promise broken | 74.0% |
+| 2B logprob alone | 95% | 0% — honest refusal | — | — |
+| **2B + consensus** | 90% | **100.0%** | **93.0%** | **92.5%** |
+| **2B + consensus** | 95% | **87.0%** | **98.9%** | **99.0%** |
+| 4B + consensus | 90% *and* 95% | 100.0% | 97.0% | 96.7% |
+
+The 2B alone breaks its promise by 12 points (its 60-gold CV can't see the
+miscalibration); with consensus it keeps both targets, and **the 95% target
+is its sweet spot** — trading 13 points of coverage for ~6 points of
+precision. That makes the smallest viable model an honest operating point
+for X1-class laptops: 87% of the corpus auto-labeled at ~99% precision,
+with the 4B as the full-coverage tier.
+
 Measured and retired (the harness arbitrates): the cross-family local
 ensemble (identical quality at 1.5× cost), static few-shot (coverage
 regression, and its speed rationale is void — cross-item partial-prefix KV
