@@ -3,6 +3,43 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.12.0 — 2026-07-20
+
+Partner-prep: the three builds that make the loop runnable on data we didn't
+curate — cold-start gold authoring, taxonomies with lookalike label names,
+and data as it actually arrives.
+
+### Added
+- **Gold bootstrap mode** (`python -m tessera bootstrap --data d.csv
+  --taxonomy t.json [--n 100]`): before any model runs, a cluster-stratified
+  sample of the corpus (hashed-BoW leader clusters, round-robin across
+  clusters so the sample spans the corpus's regions) is served in the UI for
+  keyboard-first gold authoring — 1–9 picks the label, R skips, U undoes,
+  progress shows gold authored vs to-go. Labels land as gold with source
+  `bootstrap` (seed-immutable like curated gold); Ctrl+C prints the handoff.
+  Span taxonomies are declined honestly (author span gold by quotes).
+  Verified live in the browser: CSV → sample → click + keyboard picks →
+  undo → sourced gold rows.
+- **Letter-keyed logprob answers** (`TESSERA_ANSWER_KEY`, default `auto`):
+  when label words can't be told apart by their first token
+  (billing_dispute / billing_question), the word-style logprob head silently
+  discards the shared token's probability mass. Auto mode detects shared
+  3-char prefixes and switches the prompt to lettered options (A/B/C…, ≤26
+  labels), reading the letter-token distribution and mapping back. Few-shot
+  examples answer in letters too. `letter`/`word` force either mode;
+  existing distinct-word taxonomies (AG News, SMS, intents) are unchanged,
+  caches included.
+- **CSV ingest** for items and gold (`--data d.csv`, `--gold g.csv`):
+  extension-detected, Excel-BOM tolerant, `id` optional (generated when
+  absent), `text`/`prompt`/`response_a`/`response_b` recognized, every other
+  column preserved as item metadata. JSONL behavior byte-identical.
+
+### Tests
+189 (16 new: CSV items/gold/pairwise/BOM, letters_needed rule, letter
+prompt + mapping + forced modes, cluster_sample spread/determinism/exclude,
+bootstrap server endpoints incl. undo + unknown-label rejection + the
+authored gold calibrating a real gate).
+
 ## 0.11.1 — 2026-07-17
 
 ### Fixed

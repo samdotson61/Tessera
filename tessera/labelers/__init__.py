@@ -46,5 +46,6 @@ def make_labelers(settings, examples=None):
                 cache=cache, base_url=u,
                 examples=examples, fewshot=getattr(settings, "fewshot", 0),
                 logprobs=getattr(settings, "logprobs", False),
-                fewshot_static=getattr(settings, "fewshot_static", False)))
+                fewshot_static=getattr(settings, "fewshot_static", False),
+                answer_key=getattr(settings, "answer_key", "auto")))
     return labelers or make_stub_ensemble()

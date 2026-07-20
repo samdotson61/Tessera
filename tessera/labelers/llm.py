@@ -65,6 +65,19 @@ def _spread(label: str, conf: float, labels: list) -> dict:
     return dist
 
 
+def letters_needed(labels) -> bool:
+    """True when the word-style logprob head can't tell the labels apart by
+    their first token: two labels sharing their first three characters
+    (billing_dispute / billing_question) collapse to the same answer token,
+    whose probability mass the prefix-matcher must then discard. Letter-keyed
+    answers (A/B/C…) give every option its own unambiguous token. Capped at
+    26 labels — beyond that, fall back to words."""
+    if not labels or len(labels) > 26:
+        return False
+    heads = {str(l).lower()[:3] for l in labels}
+    return len(heads) < len(labels)
+
+
 class LLMLabeler(Labeler):
     ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
     OPENAI_URL = "https://api.openai.com/v1/chat/completions"
@@ -74,7 +87,7 @@ class LLMLabeler(Labeler):
                  n_samples: int = 5, cache: ResponseCache | None = None,
                  max_retries: int = 3, transport=None, base_url: str = "",
                  examples=None, fewshot: int = 0, logprobs: bool = False,
-                 fewshot_static: bool = False):
+                 fewshot_static: bool = False, answer_key: str = "auto"):
         self.provider = provider
         self.api_key = api_key
         # base_url points the provider-shaped request at any compatible
@@ -96,6 +109,7 @@ class LLMLabeler(Labeler):
         # per item, the label token's top-logprobs ARE the distribution —
         # continuous confidence at 1/5th the calls of self-consistency voting.
         self.logprobs = bool(logprobs) and provider == "openai"
+        self.answer_key = answer_key      # "auto" | "letter" | "word" (logprob mode)
         self._examples = []
         self._static = []
         if examples and self.fewshot:
@@ -116,13 +130,18 @@ class LLMLabeler(Labeler):
                         self._static.append((by_class[lab].pop(0), lab))
                     i += 1
 
-    def _fewshot_block(self, item_text: str) -> str:
+    def _fewshot_block(self, item_text: str, letter_of=None) -> str:
         if not self._examples:
             return ""
+
+        def answer(lab):
+            if self.logprobs:
+                return letter_of[lab] if letter_of else lab
+            return f'{{"label": "{lab}"}}'
+
         if self._static and all(t != item_text for t, _ in self._static):
             # the shared block (an item appearing in it falls through to the
             # nearest-mode block below, which excludes self — no gold leak)
-            answer = (lambda lab: lab if self.logprobs else f'{{"label": "{lab}"}}')
             lines = ["", "Examples of correct labels:"]
             lines += [f'Text: {t}\nAnswer: {answer(lab)}' for t, lab in self._static]
             return "\n".join(lines) + "\n"
@@ -134,8 +153,7 @@ class LLMLabeler(Labeler):
         for _, t, lab in ranked:
             if t == item_text:
                 continue   # never leak the item's own gold label
-            answer = lab if self.logprobs else f'{{"label": "{lab}"}}'
-            lines.append(f'Text: {t}\nAnswer: {answer}')
+            lines.append(f'Text: {t}\nAnswer: {answer(lab)}')
             n += 1
             if n >= self.fewshot:
                 break
@@ -143,12 +161,22 @@ class LLMLabeler(Labeler):
 
     def label(self, item: Item, taxonomy: Taxonomy) -> LabelOutput:
         span_mode = taxonomy.label_type == "span"
-        fewshot = ("" if span_mode or taxonomy.label_type == "pairwise"
-                   else self._fewshot_block(item.render()))
         if self.logprobs and taxonomy.label_type == "classification":
-            prompt = (taxonomy.to_prompt(style="word") + "\n" + fewshot +
+            mode = self.answer_key
+            if mode == "auto":
+                mode = "letter" if letters_needed(taxonomy.labels) else "word"
+            if mode == "letter" and 0 < len(taxonomy.labels) <= 26:
+                letter_of = {lab: chr(65 + i) for i, lab in enumerate(taxonomy.labels)}
+                prompt = (taxonomy.to_prompt(style="letter") + "\n" +
+                          self._fewshot_block(item.render(), letter_of=letter_of) +
+                          "\nText:\n" + item.render() + "\nAnswer:")
+                return self._label_logprob(prompt, taxonomy.labels, letter_of=letter_of)
+            prompt = (taxonomy.to_prompt(style="word") + "\n" +
+                      self._fewshot_block(item.render()) +
                       "\nText:\n" + item.render() + "\nAnswer:")
             return self._label_logprob(prompt, taxonomy.labels)
+        fewshot = ("" if span_mode or taxonomy.label_type == "pairwise"
+                   else self._fewshot_block(item.render()))
         prompt = taxonomy.to_prompt() + "\n" + fewshot + "\nText:\n" + item.render()
         labels = taxonomy.labels
         samples = []          # (label, conf, rationale) per successful sample
@@ -212,12 +240,14 @@ class LLMLabeler(Labeler):
             raise ValueError("LLM response missing 'label'")
         return str(label), float(obj.get("confidence", 0.7)), str(obj.get("rationale", ""))
 
-    def _label_logprob(self, prompt: str, labels: list) -> LabelOutput:
+    def _label_logprob(self, prompt: str, labels: list, letter_of=None) -> LabelOutput:
         """One call; the first answer token's top-logprobs become the label
-        distribution. Tokens are matched to labels by unambiguous prefix (a
-        token claiming several labels is dropped); unmatched probability mass
-        is discarded and the rest renormalized — mass that went to non-label
-        tokens is real uncertainty and should flatten the result."""
+        distribution. In word mode, tokens are matched to labels by unambiguous
+        prefix (a token claiming several labels is dropped); in letter mode
+        (letter_of: label -> "A"/"B"/…) a token must be exactly the option's
+        letter. Unmatched probability mass is discarded and the rest
+        renormalized — mass that went to non-label tokens is real uncertainty
+        and should flatten the result."""
         import math as _math
         key = ResponseCache.key(self.provider, self.model, "lp-v1", prompt, 0)
         raw = self.cache.get(key) if self.cache else None
@@ -237,11 +267,17 @@ class LLMLabeler(Labeler):
             uniform = {l: 1.0 / len(labels) for l in labels} if labels else {}
             return LabelOutput(self.model_id, uniform, "logprobs unavailable in reply")
         dist = {l: 0.0 for l in labels}
+        by_letter = ({v: k for k, v in letter_of.items()} if letter_of else None)
         for entry in tops:
-            tok = str(entry.get("token", "")).strip().lower()
+            tok = str(entry.get("token", "")).strip()
             if not tok:
                 continue
-            matches = [l for l in labels if l.lower().startswith(tok)]
+            if by_letter is not None:
+                lab = by_letter.get(tok.rstrip(".):").upper())
+                if lab is not None:
+                    dist[lab] += _math.exp(float(entry["logprob"]))
+                continue
+            matches = [l for l in labels if l.lower().startswith(tok.lower())]
             if len(matches) == 1:
                 dist[matches[0]] += _math.exp(float(entry["logprob"]))
         z = sum(dist.values())

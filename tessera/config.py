@@ -40,6 +40,10 @@ class Settings:
     logprobs: bool = False            # classification via the label token's logprobs:
                                       # 1 call/item, continuous confidence (openai-shaped
                                       # local servers only — llama-server/vLLM)
+    answer_key: str = "auto"          # logprob answer format: "auto" uses letters (A/B/C)
+                                      # when label words share prefixes and can't be told
+                                      # apart by their first token, else the label word;
+                                      # "letter" | "word" force it
     fewshot_static: bool = False      # one fixed example block for every item (shared
                                       # prompt prefix -> the server caches the prefill)
     cache_path: str = "tessera_cache.db"   # LLM response cache; "none" disables
@@ -85,6 +89,7 @@ class Settings:
             llm_samples=int(os.environ.get("TESSERA_SAMPLES", "5")),
             fewshot=int(os.environ.get("TESSERA_FEWSHOT", "0")),
             logprobs=os.environ.get("TESSERA_LOGPROBS", "0") in ("1", "true", "yes"),
+            answer_key=os.environ.get("TESSERA_ANSWER_KEY", "auto"),
             fewshot_static=os.environ.get("TESSERA_FEWSHOT_STATIC", "0") in ("1", "true", "yes"),
             cache_path=os.environ.get("TESSERA_CACHE", "tessera_cache.db"),
             workers=int(os.environ.get("TESSERA_WORKERS", "8")),

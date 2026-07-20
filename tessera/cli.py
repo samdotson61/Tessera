@@ -2,6 +2,7 @@
 
     python -m tessera demo                 # run the whole loop on the bundled sample
     python -m tessera demo --serve         # ...then open the review UI
+    python -m tessera bootstrap --data d.csv --taxonomy t.json   # author seed gold first
     python -m tessera label --data d.jsonl --taxonomy t.json [--gold g.jsonl]
     python -m tessera report --dataset demo
     python -m tessera export --dataset demo --out labels.jsonl
@@ -149,6 +150,42 @@ def cmd_export(args):
     storage.close()
 
 
+def cmd_bootstrap(args):
+    """Cold-start gold authoring: pick a cluster-stratified sample of unlabeled
+    items and serve the UI so a human labels them BEFORE any model runs.
+    The labels land as gold (source 'bootstrap'); then run `label` as usual."""
+    from .engine.goldset import cluster_sample
+    settings = Settings.from_env()
+    settings.db_path = args.db
+    if args.port:
+        settings.port = args.port
+    storage = Storage(settings.db_path)
+    taxonomy = appmod.load_taxonomy(args.taxonomy)
+    if taxonomy.label_type == "span":
+        print("span bootstrap is not supported yet — author span gold by quotes "
+              "(see README) and pass it to `label --gold`.")
+        return 1
+    if args.data:
+        items = appmod.load_items(args.data, args.dataset)
+        appmod.ingest(storage, args.dataset, args.dataset, items, taxonomy, None)
+    items = storage.get_items(args.dataset)
+    if not items:
+        print(f"no items in dataset '{args.dataset}' — pass --data to ingest first.")
+        return 1
+    existing = storage.get_gold(args.dataset)
+    sample = cluster_sample({it.id: it.render() for it in items}, args.n,
+                            exclude=set(existing))
+    if not sample:
+        print(f"nothing to bootstrap: all {len(items)} item(s) already hold gold.")
+        return 1
+    print(f"bootstrap: {len(sample)} items picked across the corpus "
+          f"({len(existing)} gold already present). "
+          "Keys: 1-9 pick the label · R skips · U undoes.")
+    serve(storage, args.dataset, taxonomy, settings, bootstrap_ids=sample)
+    storage.close()
+    return 0
+
+
 def cmd_serve(args):
     settings = Settings.from_env()
     settings.db_path = args.db
@@ -205,6 +242,16 @@ def build_parser():
     e.add_argument("--out", default="labels.jsonl")
     e.add_argument("--pairs", help="also export flywheel training pairs to this path")
     e.set_defaults(func=cmd_export)
+
+    b = sub.add_parser("bootstrap",
+                       help="author seed gold in the UI before any model runs (cold start)")
+    b.add_argument("--taxonomy", required=True, help="taxonomy JSON (the rubric)")
+    b.add_argument("--data", help="items JSONL/CSV to ingest (omit if already ingested)")
+    b.add_argument("--dataset", default="ds1", help="dataset id")
+    b.add_argument("--n", type=int, default=100,
+                   help="sample size to label (cluster-stratified; default 100)")
+    b.add_argument("--port", type=int, default=None)
+    b.set_defaults(func=cmd_bootstrap)
 
     s = sub.add_parser("serve", help="open the keyboard-first review UI")
     s.add_argument("--dataset", default="demo")

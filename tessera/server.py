@@ -11,7 +11,7 @@ import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-from .schemas import to_dict
+from .schemas import GoldItem, to_dict
 from .engine.router import order_queue
 from .labelers.judge import make_judge
 from .pipeline import record_human_action, calibrate_and_gate, undo_last_human_action
@@ -23,18 +23,34 @@ _CT = {".html": "text/html", ".js": "application/javascript", ".css": "text/css"
 
 
 class Context:
-    def __init__(self, storage, dataset_id, taxonomy, settings, judge=None):
+    def __init__(self, storage, dataset_id, taxonomy, settings, judge=None,
+                 bootstrap_ids=None):
         self.storage = storage
         self.dataset_id = dataset_id
         self.taxonomy = taxonomy
         self.settings = settings
         self.judge = judge
         self.last_gate = None
+        # Cold-start gold authoring (docs/04 §7): the ordered sample a human
+        # labels before any model runs. done stack supports undo.
+        self.bootstrap = list(bootstrap_ids) if bootstrap_ids else None
+        self.bootstrap_target = len(self.bootstrap) if self.bootstrap else 0
+        self.bootstrap_done = []
 
 
 def _queue_payload(ctx):
-    preds = ctx.storage.get_predictions(ctx.dataset_id)
     items = {it.id: it for it in ctx.storage.get_items(ctx.dataset_id)}
+    if ctx.bootstrap is not None:
+        # Bootstrap mode: no model has run; the queue is the sample to author.
+        return [{
+            "item_id": iid,
+            "text": items[iid].text if iid in items else "",
+            "meta": items[iid].meta if iid in items else {},
+            "predicted_label": None, "confidence": 0.0, "agreement": 0.0,
+            "rationale": "BOOTSTRAP — no model yet; you author this gold label.",
+            "audit": False, "bootstrap": True, "distribution": {},
+        } for iid in ctx.bootstrap]
+    preds = ctx.storage.get_predictions(ctx.dataset_id)
 
     def entry(p, is_audit):
         it = items.get(p.item_id)
@@ -93,6 +109,11 @@ def make_handler(ctx: Context):
                     "target_precision": ctx.settings.target_precision,
                     "gate": to_dict(ctx.last_gate) if ctx.last_gate else None,
                     "events": event_stats(ctx.storage, ctx.dataset_id),
+                    "bootstrap": (None if ctx.bootstrap is None else {
+                        "remaining": len(ctx.bootstrap),
+                        "done": len(ctx.bootstrap_done),
+                        "target": ctx.bootstrap_target,
+                        "gold": c["gold"]}),
                 })
             if path == "/api/queue":
                 return self._json({"queue": _queue_payload(ctx)})
@@ -123,7 +144,33 @@ def make_handler(ctx: Context):
                     return self._json({"error": str(e)}, 400)
                 return self._json({"ok": True, "final_label": final})
 
+            if path == "/api/bootstrap":
+                if ctx.bootstrap is None:
+                    return self._json({"error": "not in bootstrap mode"}, 400)
+                item_id = str(body.get("item_id", ""))
+                if item_id not in ctx.bootstrap:
+                    return self._json({"error": f"'{item_id}' not in the sample"}, 400)
+                label = body.get("label")
+                if label is not None:
+                    if label not in ctx.taxonomy.labels:
+                        return self._json({"error": f"unknown label '{label}'"}, 400)
+                    ctx.storage.add_gold([GoldItem(
+                        item_id=item_id, dataset_id=ctx.dataset_id,
+                        label=label, source="bootstrap")])
+                ctx.bootstrap.remove(item_id)
+                ctx.bootstrap_done.append((item_id, label))
+                return self._json({"ok": True, "item_id": item_id, "label": label,
+                                   "remaining": len(ctx.bootstrap)})
+
             if path == "/api/undo":
+                if ctx.bootstrap is not None:
+                    if not ctx.bootstrap_done:
+                        return self._json({"error": "nothing to undo"}, 400)
+                    item_id, label = ctx.bootstrap_done.pop()
+                    if label is not None:
+                        ctx.storage.remove_gold(item_id, source="bootstrap")
+                    ctx.bootstrap.insert(0, item_id)
+                    return self._json({"ok": True, "item_id": item_id})
                 item_id = undo_last_human_action(ctx.storage, ctx.dataset_id)
                 if item_id is None:
                     return self._json({"error": "nothing to undo"}, 400)
@@ -158,11 +205,14 @@ def make_handler(ctx: Context):
     return Handler
 
 
-def serve(storage, dataset_id, taxonomy, settings, gate_result=None):
-    ctx = Context(storage, dataset_id, taxonomy, settings, judge=make_judge(settings))
+def serve(storage, dataset_id, taxonomy, settings, gate_result=None,
+          bootstrap_ids=None):
+    ctx = Context(storage, dataset_id, taxonomy, settings, judge=make_judge(settings),
+                  bootstrap_ids=bootstrap_ids)
     ctx.last_gate = gate_result
     httpd = ThreadingHTTPServer((settings.host, settings.port), make_handler(ctx))
-    print(f"Tessera review UI  ->  http://{settings.host}:{settings.port}")
+    mode = "gold bootstrap" if bootstrap_ids else "review UI"
+    print(f"Tessera {mode}  ->  http://{settings.host}:{settings.port}")
     print("Ctrl+C to stop.")
     try:
         httpd.serve_forever()
@@ -170,3 +220,11 @@ def serve(storage, dataset_id, taxonomy, settings, gate_result=None):
         print("\nstopping…")
     finally:
         httpd.server_close()
+        if ctx.bootstrap is not None:
+            n_gold = len(storage.get_gold(dataset_id))
+            authored = sum(1 for _, lab in ctx.bootstrap_done if lab is not None)
+            print(f"bootstrap session: {authored} gold authored this session; "
+                  f"the dataset now holds {n_gold} gold label(s).")
+            print(f"next: python -m tessera --db {settings.db_path} label "
+                  f"--data <items> --taxonomy <tax> --dataset {dataset_id}  "
+                  "(or run your usual loop — the gold is stored)")

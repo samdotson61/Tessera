@@ -84,6 +84,17 @@ class Taxonomy:
                 lines.append(f"- {lab}: {d}" if d else f"- {lab}")
             lines.append("Respond with ONLY the label word, nothing else.")
             return "\n".join(lines)
+        if style == "letter" and self.label_type == LabelType.CLASSIFICATION.value:
+            # Letter-keyed answer for logprob-head labeling when label words
+            # share prefixes (billing_dispute vs billing_question): one
+            # unambiguous single-token answer per option.
+            lines = ["Task: choose the correct label for the text below.",
+                     f"Guidelines: {self.guidelines}".rstrip(), "Options:"]
+            for i, lab in enumerate(self.labels):
+                d = self.definitions.get(lab, "")
+                lines.append(f"{chr(65 + i)}. {lab}" + (f": {d}" if d else ""))
+            lines.append("Respond with ONLY the single letter of the correct option.")
+            return "\n".join(lines)
         if self.label_type == LabelType.SPAN.value:
             lines = [
                 "Task: extract every entity span from the text below.",

@@ -27,9 +27,12 @@ python -m tessera --db demo-span.db demo --span
 # Then open the keyboard-first review UI for the items it routed to you:
 python -m tessera --db demo.db demo --serve     # http://127.0.0.1:8080
 
-# Label your own data (the bundled sample doubles as a format example):
+# Label your own data (JSONL or CSV; the bundled sample doubles as a format example):
 python -m tessera label --data tessera/sample_data/intents.jsonl \
     --taxonomy tessera/sample_data/taxonomy.json --gold tessera/sample_data/gold.jsonl --dataset ds1
+
+# No gold yet? Author it first — a cluster-stratified sample, keyboard-first (cold start):
+python -m tessera bootstrap --data your.csv --taxonomy tax.json --dataset ds1 --n 100
 python -m tessera --db tessera.db report --dataset ds1
 python -m tessera --db tessera.db export --dataset ds1 --out labels.jsonl --pairs pairs.jsonl
 ```
@@ -124,6 +127,7 @@ backoff, and a concurrent labeling pool.
 | `TESSERA_FEWSHOT` | `0` | k nearest gold examples shown in the prompt (RAG-lite, classification) |
 | `TESSERA_FEWSHOT_STATIC` | `0` | one fixed example block for all items (measured: not recommended) |
 | `TESSERA_LOGPROBS` | `0` | logprob-head classification: 1 call/item, token-probability confidence (openai-shaped local servers) |
+| `TESSERA_ANSWER_KEY` | `auto` | logprob answer format: `auto` switches to lettered options (A/B/C…) when label words share prefixes; `letter`/`word` force it |
 | `TESSERA_JUDGE` | off | LLM-as-judge provider — use a *different family* than the labeler |
 | `TESSERA_JUDGE_MODEL` | per provider | judge model override |
 | `TESSERA_GROW_GOLD` | `1` | record review accepts/edits as gold (source `human`) |

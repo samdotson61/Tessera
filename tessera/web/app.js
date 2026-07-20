@@ -7,6 +7,7 @@ let idx = 0;
 let labels = [];
 let labelType = "classification";
 let currentSpans = [];   // span-mode working copy of the annotation being reviewed
+let bootstrapMode = false;   // cold-start gold authoring: no model has run yet
 
 async function getJSON(url) { const r = await fetch(url); return r.json(); }
 async function postJSON(url, body) {
@@ -23,6 +24,19 @@ async function refreshState() {
   const s = await getJSON("/api/state");
   labels = s.taxonomy.labels;
   labelType = s.taxonomy.label_type || "classification";
+  bootstrapMode = !!s.bootstrap;
+  if (bootstrapMode) {
+    document.querySelector(".hint").innerHTML =
+      "<b>1–9</b> pick the correct label · <b>R</b> skip · <b>U</b> undo · " +
+      "<b>J/K</b> next/prev — you are authoring seed gold; no model has run yet";
+    const b = s.bootstrap;
+    document.getElementById("stats").textContent =
+      `${s.counts.items} items · authoring gold: ${b.done} done · ${b.remaining} to go`;
+    document.getElementById("coverage").innerHTML =
+      `Gold so far: <b>${b.gold}</b> — labels you author here calibrate the gate ` +
+      `(aim for ~50–150; press Ctrl+C in the terminal when done)`;
+    return;
+  }
   if (labelType === "span") {
     document.querySelector(".hint").innerHTML =
       "<b>select text + 1–9</b> add span · <b>click a span</b> remove · " +
@@ -183,6 +197,24 @@ function render() {
     prog.appendChild(b);
   }
   const conf = document.getElementById("conf");
+  if (item.bootstrap) {
+    conf.textContent = "no model prediction — you author this label";
+    conf.className = "conf mid";
+    renderText(item);
+    document.getElementById("suggested").textContent = "— (bootstrap)";
+    const rat0 = document.getElementById("rationale");
+    rat0.textContent = item.rationale; rat0.hidden = true;
+    const box0 = document.getElementById("labels");
+    box0.innerHTML = "";
+    labels.forEach((lab, i) => {
+      const b = document.createElement("button");
+      b.className = "label-btn";
+      b.innerHTML = `<span class="num">${i + 1}</span> ${lab}`;
+      b.onclick = () => bootstrapPick(lab);
+      box0.appendChild(b);
+    });
+    return;
+  }
   conf.textContent = `confidence ${fmtPct(item.confidence)} · agreement ${fmtPct(item.agreement)}`;
   conf.className = "conf " + (item.confidence >= 0.66 ? "hi" : item.confidence >= 0.4 ? "mid" : "lo");
   if (labelType === "span") {
@@ -217,6 +249,16 @@ async function decide(action, label) {
   const item = queue[idx];
   if (!item) return;
   await postJSON("/api/action", { item_id: item.item_id, action, label });
+  queue.splice(idx, 1);
+  if (idx >= queue.length) idx = Math.max(0, queue.length - 1);
+  await refreshState();
+  render();
+}
+
+async function bootstrapPick(label) {   // label null = skip this item
+  const item = queue[idx];
+  if (!item) return;
+  await postJSON("/api/bootstrap", { item_id: item.item_id, label });
   queue.splice(idx, 1);
   if (idx >= queue.length) idx = Math.max(0, queue.length - 1);
   await refreshState();
@@ -321,6 +363,16 @@ document.addEventListener("keydown", (e) => {
   if (document.getElementById("reviewer").hidden) return;
   const item = queue[idx];
   if (!item) return;
+  if (item.bootstrap) {
+    if (e.key.toLowerCase() === "r") { bootstrapPick(null); }
+    else if (e.key.toLowerCase() === "j") { if (idx < queue.length - 1) { idx++; render(); } }
+    else if (e.key.toLowerCase() === "k") { if (idx > 0) { idx--; render(); } }
+    else if (/^[1-9]$/.test(e.key)) {
+      const i = parseInt(e.key, 10) - 1;
+      if (i < labels.length) bootstrapPick(labels[i]);
+    }
+    return;
+  }
   if (labelType === "span") {
     if (e.key === "Enter" || e.key.toLowerCase() === "a") { e.preventDefault(); submitSpans(); }
     else if (e.key.toLowerCase() === "r") { decide("reject", null); }
