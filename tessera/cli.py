@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 
 from .config import Settings
@@ -30,6 +31,23 @@ def _taxonomy_for_dataset(storage, dataset_id):
     if not preds:
         return None
     return storage.get_taxonomy(preds[0].taxonomy_id)
+
+
+def _resolve_target(storage, dataset_id, settings, explicit=None):
+    """The target a report/serve re-gate should honor, in order of authority:
+    an explicit --target flag, an explicitly-set TESSERA_TARGET_PRECISION
+    (environment or .env), the dataset's own last-gated target (runs table),
+    then the built-in default. Without this, serving a dataset labeled at
+    --target 0.90 silently re-gated it at the 0.95 default — showing an
+    honest refusal for a promise nobody made. Returns (target, source)."""
+    if explicit is not None:
+        return explicit, "--target"
+    if "TESSERA_TARGET_PRECISION" in os.environ:
+        return settings.target_precision, "TESSERA_TARGET_PRECISION"
+    runs = storage.get_runs(dataset_id, limit=1)
+    if runs:
+        return float(runs[-1]["target"]), "last gating run"
+    return settings.target_precision, "default"
 
 
 def _print_summary(gate, taxonomy=None):
@@ -95,6 +113,11 @@ def cmd_report(args):
     if not taxonomy:
         print(f"no predictions for dataset '{args.dataset}'. Run `label` or `demo` first.")
         return 1
+    target, source = _resolve_target(storage, args.dataset, settings, args.target)
+    settings.target_precision = target
+    if source == "last gating run":
+        print(f"target {target:.0%} (from the dataset's last gating run; "
+              "override with --target or TESSERA_TARGET_PRECISION)", file=sys.stderr)
     gate = calibrate_and_gate(storage, args.dataset, taxonomy,
                               settings.target_precision, settings, log_events=False,
                               judge=make_judge(settings))
@@ -136,6 +159,11 @@ def cmd_serve(args):
     if not taxonomy:
         print(f"no data for dataset '{args.dataset}'. Run `python -m tessera demo` first.")
         return 1
+    target, source = _resolve_target(storage, args.dataset, settings, args.target)
+    settings.target_precision = target   # the UI slider + in-server re-gates inherit it
+    if source == "last gating run":
+        print(f"target {target:.0%} (from the dataset's last gating run; "
+              "override with --target or TESSERA_TARGET_PRECISION)")
     gate = calibrate_and_gate(storage, args.dataset, taxonomy,
                               settings.target_precision, settings, log_events=False,
                               judge=make_judge(settings))
@@ -168,6 +196,8 @@ def build_parser():
 
     r = sub.add_parser("report", help="print the quality report for a dataset")
     r.add_argument("--dataset", default="demo")
+    r.add_argument("--target", type=float, default=None,
+                   help="target precision (default: the dataset's last-gated target)")
     r.set_defaults(func=cmd_report)
 
     e = sub.add_parser("export", help="export finalized labels to JSONL")
@@ -179,6 +209,8 @@ def build_parser():
     s = sub.add_parser("serve", help="open the keyboard-first review UI")
     s.add_argument("--dataset", default="demo")
     s.add_argument("--port", type=int, default=None)
+    s.add_argument("--target", type=float, default=None,
+                   help="target precision (default: the dataset's last-gated target)")
     s.set_defaults(func=cmd_serve)
     return p
 

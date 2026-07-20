@@ -34,6 +34,10 @@ python -m tessera --db tessera.db report --dataset ds1
 python -m tessera --db tessera.db export --dataset ds1 --out labels.jsonl --pairs pairs.jsonl
 ```
 
+`report` and `serve` re-gate at the dataset's **last-gated target** by
+default (override with `--target` or `TESSERA_TARGET_PRECISION`), so the
+numbers you review are for the promise you actually made.
+
 Run the tests:
 
 ```bash

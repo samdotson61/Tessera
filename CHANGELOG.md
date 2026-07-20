@@ -3,6 +3,19 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.11.1 — 2026-07-17
+
+### Fixed
+- **`report` and `serve` now default to the dataset's last-gated target**
+  (from the runs table) instead of the 0.95 env default. Serving a dataset
+  labeled at `--target 0.90` used to silently re-gate it at 0.95 and show
+  an honest refusal for a promise nobody made. Resolution order: `--target`
+  flag (new on both commands) → explicitly-set `TESSERA_TARGET_PRECISION`
+  (environment or `.env`) → the dataset's last gating run → the built-in
+  default. The resolved target is written into settings, so the UI trust
+  slider and in-server re-gates inherit it; a provenance line states where
+  the target came from when it was read from the dataset.
+
 ## 0.11.0 — 2026-07-17
 
 ### Changed
