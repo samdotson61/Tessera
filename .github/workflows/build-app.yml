@@ -1,0 +1,62 @@
+name: build-app
+
+# One-file `tessera` binaries for macOS / Linux / Windows (appmap.mp T2).
+# Runs on version tags and on demand; tag builds attach binaries to the release.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  binary:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            sep: ":"
+            artifact: tessera-macos-arm64
+          - os: ubuntu-latest
+            sep: ":"
+            artifact: tessera-linux-x64
+          - os: windows-latest
+            sep: ";"
+            artifact: tessera-windows-x64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyinstaller
+      - name: Build one-file binary
+        shell: bash
+        run: >
+          pyinstaller --onefile --name tessera --console --noconfirm --clean
+          --add-data "tessera/web${{ matrix.sep }}tessera/web"
+          --add-data "tessera/sample_data${{ matrix.sep }}tessera/sample_data"
+          --paths . --collect-submodules tessera
+          packaging/launcher.py
+      - name: Smoke test (offline demo through the binary)
+        shell: bash
+        run: |
+          ./dist/tessera* --db smoke.db demo | grep "AUTO-LABELED"
+      - name: Rename artifact
+        shell: bash
+        run: |
+          src=$(ls dist/tessera*)
+          mv "$src" "dist/${{ matrix.artifact }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+      - name: Attach to release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
+            gh release create "${GITHUB_REF_NAME}" --generate-notes
+          gh release upload "${GITHUB_REF_NAME}" "dist/${{ matrix.artifact }}" --clobber

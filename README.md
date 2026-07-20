@@ -12,6 +12,21 @@ data flywheel. *Tessera is a working codename — rename at will.*
 > is specified in [`docs/03`](docs/03-system-architecture.md) and
 > [`docs/08`](docs/08-implementation-and-development-plan.md).
 
+## Open it like an app
+
+```bash
+pip install git+https://github.com/samdotson61/Tessera.git   # installs the `tessera` command
+tessera app                                                   # server + review UI in one step
+```
+
+First run loads the bundled sample **offline** (the deterministic stub — no
+model or API is called by double-clicking anything); after that, `tessera
+app` reopens your most recently gated dataset at its own target.
+`--window` gives a native window with the `[app]` extra installed;
+one-file binaries for macOS/Linux/Windows build on every release tag
+(`.github/workflows/build-app.yml`) — construction status in
+[`appmap.mp`](appmap.mp).
+
 ## Quickstart (zero dependencies)
 
 ```bash

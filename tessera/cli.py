@@ -1,5 +1,6 @@
 """Command-line interface.
 
+    python -m tessera app                  # open Tessera like an app (server + UI)
     python -m tessera demo                 # run the whole loop on the bundled sample
     python -m tessera demo --serve         # ...then open the review UI
     python -m tessera rubric-check --data d.csv --labels their.csv --taxonomy t.json
@@ -217,6 +218,110 @@ def cmd_rubric_check(args):
     return 0
 
 
+def _free_port(host, preferred):
+    """The preferred port if free, else an OS-assigned one (app mode should
+    open a window, not die on an address-in-use)."""
+    import socket
+    for port in (preferred, 0):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind((host, port))
+                return s.getsockname()[1]
+        except OSError:
+            continue
+    return preferred
+
+
+def _prepare_app(args, settings):
+    """Everything `tessera app` needs before serving: storage, a dataset
+    (first run: the bundled sample labeled OFFLINE by the stub — never the
+    configured LLM), its taxonomy, and a gate at the dataset's own target.
+    Returns (storage, dataset_id, taxonomy, gate, first_run)."""
+    import dataclasses
+    storage = Storage(settings.db_path)
+    rows = storage.conn.execute("SELECT id FROM datasets ORDER BY id").fetchall()
+    datasets = [r["id"] for r in rows]
+    first_run = False
+    if args.dataset:
+        dataset = args.dataset
+        if dataset not in datasets:
+            raise SystemExit(f"no dataset '{dataset}' in {settings.db_path} "
+                             f"(found: {', '.join(datasets) or 'none'})")
+    elif not datasets:
+        first_run = True
+        print("first run: no data yet — loading the bundled sample, labeled "
+              "OFFLINE by the deterministic stub (no model or API is called).")
+        offline = dataclasses.replace(settings, provider="stub",
+                                      cache_path="none", judge_provider="")
+        appmod.bootstrap_demo(storage, offline, dataset_id="demo")
+        dataset = "demo"
+    else:
+        # most recently gated dataset wins; ties/no-runs fall back to first
+        last = storage.conn.execute(
+            "SELECT dataset_id FROM runs ORDER BY id DESC LIMIT 1").fetchone()
+        dataset = (last["dataset_id"] if last and last["dataset_id"] in datasets
+                   else datasets[0])
+        if len(datasets) > 1:
+            print(f"opening dataset '{dataset}' (of: {', '.join(datasets)}; "
+                  "override with --dataset)")
+    taxonomy = _taxonomy_for_dataset(storage, dataset)
+    if taxonomy is None:
+        raise SystemExit(f"dataset '{dataset}' has no predictions yet — run "
+                         f"`tessera label` or `tessera bootstrap` on it first.")
+    target, source = _resolve_target(storage, dataset, settings, None)
+    settings.target_precision = target
+    if source == "last gating run":
+        print(f"target {target:.0%} (from the dataset's last gating run)")
+    gate = calibrate_and_gate(storage, dataset, taxonomy, target, settings,
+                              log_events=False, judge=make_judge(settings))
+    return storage, dataset, taxonomy, gate, first_run
+
+
+def cmd_app(args):
+    """Open Tessera like an app: prepare a dataset, start the server, and
+    open the UI — default browser everywhere; --window uses a native window
+    when pywebview is installed (`pip install tessera-label[app]`)."""
+    settings = Settings.from_env()
+    settings.db_path = args.db
+    settings.port = _free_port(settings.host, args.port or settings.port)
+    storage, dataset, taxonomy, gate, _ = _prepare_app(args, settings)
+
+    if args.window:
+        try:
+            import webview   # optional extra [app]
+        except ImportError:
+            webview = None
+            print("pywebview is not installed (`pip install tessera-label[app]`) "
+                  "— opening the default browser instead.")
+        if webview is not None:
+            import threading
+            from .server import Context, make_handler
+            from http.server import ThreadingHTTPServer
+            ctx = Context(storage, dataset, taxonomy, settings,
+                          judge=make_judge(settings))
+            ctx.last_gate = gate
+            httpd = ThreadingHTTPServer((settings.host, settings.port),
+                                        make_handler(ctx))
+            threading.Thread(target=httpd.serve_forever, daemon=True).start()
+            url = f"http://{settings.host}:{settings.port}"
+            print(f"Tessera app window  ->  {url}")
+            webview.create_window("Tessera", url)
+            webview.start()   # blocks until the window closes
+            httpd.shutdown()
+            storage.close()
+            return 0
+
+    def open_browser(url):
+        if not args.no_browser:
+            import webbrowser
+            webbrowser.open(url)
+
+    serve(storage, dataset, taxonomy, settings, gate_result=gate,
+          on_ready=open_browser)
+    storage.close()
+    return 0
+
+
 def cmd_serve(args):
     settings = Settings.from_env()
     settings.db_path = args.db
@@ -273,6 +378,16 @@ def build_parser():
     e.add_argument("--out", default="labels.jsonl")
     e.add_argument("--pairs", help="also export flywheel training pairs to this path")
     e.set_defaults(func=cmd_export)
+
+    a = sub.add_parser("app", help="open Tessera like an app (server + UI in one command)")
+    a.add_argument("--dataset", default=None,
+                   help="dataset to open (default: most recently gated; first run loads the sample)")
+    a.add_argument("--port", type=int, default=None)
+    a.add_argument("--window", action="store_true",
+                   help="native window via pywebview (pip install tessera-label[app])")
+    a.add_argument("--no-browser", action="store_true",
+                   help="start the server without opening a browser")
+    a.set_defaults(func=cmd_app)
 
     rc = sub.add_parser("rubric-check",
                         help="session zero: diff a draft rubric against the partner's "

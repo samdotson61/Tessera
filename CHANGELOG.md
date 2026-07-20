@@ -3,6 +3,35 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.14.0 — 2026-07-20
+
+Open it like an app — multi-platform. Construction tracker: `appmap.mp`.
+
+### Added
+- **`tessera app`**: one command that picks the dataset (most recently
+  gated; `--dataset` overrides), gates at the dataset's own target, starts
+  the server, and opens the browser. First run on an empty database loads
+  the bundled sample labeled OFFLINE by the stub — never the configured
+  LLM, so double-clicking can't trigger surprise model/API calls. A busy
+  port is skipped, not fatal. `--window` opens a native window when
+  pywebview is installed (`pip install tessera-label[app]`), falling back
+  to the browser with an honest note; `--no-browser` for headless.
+- **One-file binaries** (`packaging/launcher.py` + `.github/workflows/
+  build-app.yml`): PyInstaller single-file `tessera` executables for
+  macOS/Linux/Windows, built by CI on version tags (smoke-tested in the
+  workflow; attached to the release). Double-clicking the binary with no
+  arguments opens the app. macOS arm64 build verified locally end to end
+  (help, offline demo loop, app server).
+- **PyPI-ready dist**: `tessera-label` wheel + sdist build clean and the
+  wheel passes the full demo from an isolated venv — upload is a Sam
+  handoff (see appmap.mp). New extras: `[app]` (pywebview), `[release]`
+  (build/twine/pyinstaller).
+
+### Tests
+202 (5 new: free-port behavior, first-run offline-sample guarantee,
+most-recently-gated dataset resolution, explicit/unknown dataset handling,
+last-gated-target inheritance).
+
 ## 0.13.0 — 2026-07-20
 
 The engagement kit: the case study's lessons become tools.

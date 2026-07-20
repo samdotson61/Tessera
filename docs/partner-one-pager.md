@@ -55,4 +55,8 @@ it does not quietly deliver worse labels than it promised.
   set and rubric your team can keep running without us.
 
 *Tessera is open source: github.com/samdotson61/Tessera — the design docs,
-test suite (197 tests), and every measurement above are in the repo.*
+test suite (200+ tests), and every measurement above are in the repo.
+Install is one line (`pip install
+git+https://github.com/samdotson61/Tessera.git`), and `tessera app` opens
+the whole thing; single-file binaries are built for macOS, Windows, and
+Linux.*

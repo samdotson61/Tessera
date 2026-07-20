@@ -206,14 +206,17 @@ def make_handler(ctx: Context):
 
 
 def serve(storage, dataset_id, taxonomy, settings, gate_result=None,
-          bootstrap_ids=None):
+          bootstrap_ids=None, on_ready=None):
     ctx = Context(storage, dataset_id, taxonomy, settings, judge=make_judge(settings),
                   bootstrap_ids=bootstrap_ids)
     ctx.last_gate = gate_result
     httpd = ThreadingHTTPServer((settings.host, settings.port), make_handler(ctx))
     mode = "gold bootstrap" if bootstrap_ids else "review UI"
-    print(f"Tessera {mode}  ->  http://{settings.host}:{settings.port}")
+    url = f"http://{settings.host}:{settings.port}"
+    print(f"Tessera {mode}  ->  {url}")
     print("Ctrl+C to stop.")
+    if on_ready is not None:
+        on_ready(url)   # socket is already bound; safe to open a browser at it
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
