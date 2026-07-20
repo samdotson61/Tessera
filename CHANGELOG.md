@@ -3,6 +3,37 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.18.0 — 2026-07-20
+
+### Added
+- **Zero-config local model: auto-serve picks winc's 2B or 4B by memory.**
+  With nothing configured, Tessera finds a winc.cpp install (models +
+  bundled llama-server engine; `WINC_HOME`, `~/winc.cpp`, `~/.winc`) and
+  serves the right Qwen tier itself — **≥ 7 GB → 4B, else 2B** (the
+  Jobfaro rule; Apple unified memory counts as VRAM, a discrete NVIDIA
+  GPU's VRAM is used when nvidia-smi answers, tier falls back to whatever
+  model file exists). The spawn uses the measured reasoning-off recipe, is
+  lazy (first run, not app open), spawn-once-reuse per process, and cleans
+  up on exit. The UI serving line states the plan before anything starts
+  ("winc qwen3.5-4b (auto) — will start on first run — picked by 24.0 GB
+  unified memory"). Explicit `TESSERA_PROVIDER`/URLs always win;
+  `TESSERA_AUTOSERVE=0` opts out; a bare API key with no provider set does
+  NOT suppress auto-serve (nothing ever read it — the run would have
+  silently been the stub). Wired into `tessera label`, `rubric-check`, and
+  the UI's Run panel; `demo` stays deliberately offline.
+  Live-verified: a clean-environment `tessera label` on a 24 GB M4
+  auto-picked the 4B, spawned on a free port, labeled 10/10 sensibly with
+  zero no-signal, reused the engine on the second call, and terminated it
+  on exit.
+- Unit tests set `TESSERA_AUTOSERVE=0` suite-wide (a real model must never
+  spawn from tests — found the hard way: two suite spawns leaked an
+  engine, which also motivated the spawn-once-reuse guard).
+
+### Tests
+226 (7 new: 7-GB tier rule, live memory detection, asset discovery +
+missing-engine/model cases, plan tier by memory, missing-tier fallback,
+explicit-config/opt-out gating incl. the bare-key rule).
+
 ## 0.17.0 — 2026-07-20
 
 The front door: the UI now covers the whole workflow, not just review.

@@ -60,6 +60,12 @@ def _serving_status(settings):
         return {"provider": f"{settings.provider} API (key set)", "ok": True,
                 "note": "remote API — reachability not probed"}
     else:
+        from .serving import plan_auto
+        plan = plan_auto(settings)
+        if plan:
+            return {"provider": f"winc qwen3.5-{plan['tier']} (auto)", "ok": True,
+                    "note": f"will start on first run — picked by "
+                            f"{plan['mem_gb']} GB {plan['mem_source']}"}
         return {"provider": "stub (offline, deterministic)", "ok": True,
                 "note": "no model configured — set TESSERA_OPENAI_URL or an API key"}
     try:
@@ -402,7 +408,12 @@ def make_handler(ctx: Context):
 
             def _go():
                 from .app import run_full
+                from .serving import ensure_model
                 try:
+                    status = ensure_model(ctx.settings)
+                    if status.startswith("auto-serve failed"):
+                        ctx.run_state["error"] = status
+                        return
                     ctx.last_gate = run_full(
                         ctx.storage, ctx.dataset_id, ctx.taxonomy, ctx.settings,
                         target_precision=target,

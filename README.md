@@ -389,6 +389,14 @@ reference noise). Working lesson that shipped as guidance: size the audit
 sample by *count*, not rate — 10 audited items cannot detect a ~7% error
 rate (~46% chance of seeing zero errors).
 
+**Zero-config local model (v0.18):** with nothing configured, Tessera finds
+a [winc.cpp](https://github.com/samdotson61/winc.cpp) install and serves the
+right Qwen tier itself on first run — **≥ 7 GB of (V)RAM → 4B, else 2B**
+(Apple unified memory counts; the UI's serving line states the plan before
+anything starts, and the engine is spawned once, reused, and cleaned up on
+exit). Explicit `TESSERA_PROVIDER`/`TESSERA_*_URL` always win;
+`TESSERA_AUTOSERVE=0` opts out; the demo stays offline by design.
+
 **Reasoning-model serving note (load-bearing):** the logprob head reads the
 FIRST answer token, so the serving stack must not let the model deliberate
 first. Qwen3.5 on a raw llama-server verbalizes reasoning on longer items —

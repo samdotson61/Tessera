@@ -117,6 +117,10 @@ def cmd_label(args):
     items = appmod.load_items(args.data, args.dataset)
     gold = appmod.load_gold(args.gold, args.dataset, items=items) if args.gold else None
     appmod.ingest(storage, args.dataset, args.dataset, items, taxonomy, gold)
+    from .serving import ensure_model
+    status = ensure_model(settings)
+    if status.startswith("auto-serve failed"):
+        print(f"!! {status} — falling back to the offline stub", flush=True)
     gate = appmod.run_full(storage, args.dataset, taxonomy, settings)
     _print_summary(gate, taxonomy)
     storage.close()
@@ -221,6 +225,10 @@ def cmd_rubric_check(args):
         print(f"their labels use classes the rubric lacks: {unknown} — map or add "
               "them first; agreement against a missing class is always zero.")
         return 1
+    from .serving import ensure_model
+    status = ensure_model(settings)
+    if status.startswith("auto-serve failed"):
+        print(f"!! {status} — falling back to the offline stub", flush=True)
     labelers = make_labelers(settings)
     report = check(items, authority, taxonomy, labelers,
                    n=args.n, workers=settings.workers)

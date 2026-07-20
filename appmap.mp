@@ -74,6 +74,13 @@ re-run the installer once (upgrade-in-place check). Record results here.
   with pip-from-git as the documented alternative. PyPI deferred, not dead.
 - **2026-07-20 — North star amended accordingly:** one-liner installer →
   `tessera app`, no Python required on the binary path.
+- **2026-07-20 (v0.18) — Model defaults to winc's 2B/4B by memory.** The
+  T3 "process manager" tier's first slice, pulled forward by request:
+  zero-config auto-serve (≥7GB→4B else 2B, the Jobfaro rule), lazy,
+  spawn-once-reuse, exit cleanup, plan stated in the serving line, explicit
+  config always wins, tests never spawn (TESSERA_AUTOSERVE=0 suite-wide).
+  Future T3 idea noted: probe an already-running `winc serve` (:8080/:54893
+  class) and reuse it instead of spawning a sibling engine.
 
 ## Handoffs (Sam)
 
