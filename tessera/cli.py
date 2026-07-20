@@ -42,10 +42,7 @@ def _apply_paths(settings, args):
 
 
 def _taxonomy_for_dataset(storage, dataset_id):
-    preds = storage.get_predictions(dataset_id)
-    if not preds:
-        return None
-    return storage.get_taxonomy(preds[0].taxonomy_id)
+    return appmod.taxonomy_for_dataset(storage, dataset_id)
 
 
 def _resolve_target(storage, dataset_id, settings, explicit=None):

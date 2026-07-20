@@ -31,6 +31,15 @@ First run loads the bundled sample **offline** (the deterministic stub — no
 model or API is called by double-clicking anything); after that, `tessera
 app` reopens your most recently gated dataset at its own target.
 
+The UI is the whole workflow, not just review: a six-step strip — **Import
+→ Rubric → Gold → Label → Review → Export** — with each step's state derived
+from the dataset's real counts and a guide line naming the honest next
+action. Import CSV/JSONL + rubric in the browser, edit the rubric in place
+(saving bumps its version), author gold on demand, run the model with a
+live progress bar and an honest serving-status check, review with the
+keyboard, download labels as JSONL/CSV. Every control has a mouseover
+tooltip.
+
 **Where your data lives** (printed on every `tessera app` start): explicit
 `--db` → `TESSERA_DB` → an existing `./tessera.db` (project mode) → the
 per-user data home (`~/Library/Application Support/Tessera` on macOS,

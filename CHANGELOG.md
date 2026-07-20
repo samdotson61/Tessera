@@ -3,6 +3,49 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.17.0 — 2026-07-20
+
+The front door: the UI now covers the whole workflow, not just review.
+Built because the builder himself couldn't find the product in the CLI.
+
+### Added
+- **Workflow shell**: a six-step strip — Import → Rubric → Gold → Label →
+  Review → Export — where each step's state (done / needs-you) is derived
+  from the dataset's real counts, and a guide line always says the honest
+  next action. The app opens on whichever step needs attention.
+- **Import panel**: upload items (CSV/JSONL), rubric (JSON, template
+  provided), and optional gold — parsed server-side with real error
+  messages; re-importing the same ids updates them. Datasets switch from a
+  header picker (each re-gates at its own last target).
+- **Rubric panel**: labels, per-label definitions, and guidelines are
+  editable in place; saving bumps the rubric version and says "re-run to
+  apply". The case-study lesson (the rubric carries the convention) is in
+  the panel's own help text.
+- **Gold panel**: start/stop gold authoring at any time (the old
+  bootstrap-only-at-launch limitation is gone); repeated rounds exclude
+  items that already hold gold.
+- **Label panel**: honest serving status (which model, is it answering,
+  what to do if not), target input, live progress bar; runs happen in a
+  background thread with the UI usable throughout; double-start refused.
+- **Export panel**: one-click labels.jsonl / labels.csv / pairs.jsonl
+  downloads (finalized items only — honesty over completeness).
+- **Tooltips on every control** (native titles), keyboard shortcuts now
+  ignore form fields, and the review pane is unchanged for muscle memory.
+- New endpoints: `/api/import`, `/api/taxonomy`, `/api/run` (+ progress in
+  `/api/state`), `/api/dataset`, `/api/bootstrap/start|stop`,
+  `/api/export/*`; `ingest` records a dataset→taxonomy mapping so fresh
+  imports open without predictions; `run_labeling_pass` gained an
+  `on_progress` hook.
+
+Live-verified end to end in the browser as a first-time user: import a CSV
+→ edit the rubric → author gold in two rounds → run (stub) with progress →
+correct a queue item → export CSV.
+
+### Tests
+219 (7 new: state carries workflow fields; import + switch-back; naked
+import refused; rubric edit persists + 1-label refused; run progresses to
+a gate and refuses double-start; exports download; bootstrap start/stop).
+
 ## 0.16.0 — 2026-07-20
 
 Idempotency + path-portability pass, install to use, all three platforms.

@@ -48,23 +48,37 @@ def _predict_item(it, dataset_id, taxonomy, labelers):
         source="+".join(l.model_id for l in labelers))
 
 
-def run_labeling_pass(storage, dataset_id, taxonomy, labelers, workers=1, only_ids=None):
+def run_labeling_pass(storage, dataset_id, taxonomy, labelers, workers=1, only_ids=None,
+                      on_progress=None):
     """Label every item in the dataset and store predictions. Returns the predictions.
 
     workers > 1 labels items concurrently (LLM calls are network-bound); results
     are stored in dataset order from the main thread either way.
     only_ids (near-duplicate propagation) restricts the pass to the given item
     ids — cluster representatives — leaving members to mirror them at the gate.
+    on_progress(done, total) fires as each item's labeling completes.
     """
+    import threading as _threading
     items = storage.get_items(dataset_id)
     if only_ids is not None:
         items = [it for it in items if it.id in only_ids]
+    counter = {"n": 0}
+    tick_lock = _threading.Lock()
+
+    def _one(it):
+        p = _predict_item(it, dataset_id, taxonomy, labelers)
+        if on_progress is not None:
+            with tick_lock:
+                counter["n"] += 1
+                n = counter["n"]
+            on_progress(n, len(items))
+        return p
+
     if workers > 1 and len(items) > 1:
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            preds = list(pool.map(
-                lambda it: _predict_item(it, dataset_id, taxonomy, labelers), items))
+            preds = list(pool.map(_one, items))
     else:
-        preds = [_predict_item(it, dataset_id, taxonomy, labelers) for it in items]
+        preds = [_one(it) for it in items]
     for p in preds:
         storage.upsert_prediction(p)
     return preds

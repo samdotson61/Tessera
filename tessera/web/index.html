@@ -3,50 +3,153 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Tessera — Review</title>
+<title>Tessera</title>
 <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
 <header>
-  <div class="brand">Tessera <span class="tag">review</span></div>
-  <div class="stats" id="stats">loading…</div>
+  <div class="brand">Tessera</div>
+  <div class="ds-row">
+    <label for="dsPick" title="Every dataset in this database. Switching re-gates at the dataset's own last target.">dataset</label>
+    <select id="dsPick" title="Switch dataset"></select>
+  </div>
+  <div class="stats" id="stats" title="items · auto-applied · queued for you · finalized">loading…</div>
 </header>
 
+<!-- The workflow spine: every Tessera function, in the order you use them. -->
+<nav class="flow" id="flow">
+  <button data-panel="import"  title="Load your data: items as CSV or JSONL, plus the rubric (labels + definitions). Optional gold labels ride along.">1 · Import</button>
+  <button data-panel="rubric"  title="The rubric IS the product: labels, definitions, guidelines. The model reads exactly this text — edit it here, then re-run.">2 · Rubric</button>
+  <button data-panel="gold"    title="Author gold labels on a spread-out sample BEFORE any model runs. Gold calibrates the gate — aim for 50–150.">3 · Gold</button>
+  <button data-panel="run"     title="Label every item with the configured model, then calibrate and gate at your precision target.">4 · Label</button>
+  <button data-panel="review"  title="Work the queue: accept/correct what the model wasn't sure about, and verify the audit sample.">5 · Review</button>
+  <button data-panel="export"  title="Download the finalized labels (JSONL/CSV) and training pairs.">6 · Export</button>
+</nav>
+<div class="guide" id="guide" title="What Tessera suggests doing next, based on the dataset's actual state.">—</div>
+
 <main>
-  <section class="trust">
-    <div class="trust-row">
-      <label for="target">Target precision: <b id="targetVal">95%</b></label>
-      <input type="range" id="target" min="0.50" max="0.999" step="0.005" value="0.95" />
-      <button id="regate" title="Recompute the gate at this target">Re-gate</button>
-      <button id="reportBtn" title="Quality report + reliability diagram (Q)">Report</button>
+  <!-- IMPORT -->
+  <section class="panel" id="panel-import" hidden>
+    <h2>Import data</h2>
+    <p class="help">Items need a <code>text</code> column (CSV) or field (JSONL); <code>id</code> is optional.
+       A <b>new</b> dataset also needs a rubric — start from the template below. Re-importing the
+       same ids updates them (idempotent).</p>
+    <div class="grid2">
+      <label title="Name for this dataset inside Tessera.">dataset name
+        <input id="impName" placeholder="my-tickets" /></label>
+      <label title="CSV or JSONL file of items to label.">items file
+        <input type="file" id="impItems" accept=".csv,.jsonl,.json" /></label>
+      <label title="Rubric JSON: labels, definitions, guidelines. Leave empty when adding items to an existing dataset.">taxonomy / rubric (JSON)
+        <input type="file" id="impTax" accept=".json" /></label>
+      <label title="Optional: known-correct labels ({id,label} CSV or JSONL). They calibrate the gate.">gold labels (optional)
+        <input type="file" id="impGold" accept=".csv,.jsonl,.json" /></label>
     </div>
-    <div id="coverage" class="coverage">—</div>
-    <div id="report" hidden><div id="reportBody"></div></div>
+    <details><summary title="A minimal rubric to copy, edit, and upload.">rubric template</summary>
+<pre>{
+  "id": "my-rubric", "name": "My labels", "labels": ["a", "b"],
+  "definitions": {"a": "when …", "b": "when …"},
+  "guidelines": "Pick the label a careful teammate would."
+}</pre></details>
+    <button id="impGo" class="primary" title="Parse, validate, and load. Errors show here — nothing is imported silently.">Import</button>
+    <div class="notice" id="impMsg"></div>
   </section>
 
-  <section class="card" id="card">
-    <div class="empty" id="empty" hidden>
-      Queue empty &mdash; every uncertain item has been reviewed. Auto-labeled items
-      were applied without you. Export from the CLI: <code>python -m tessera export</code>.
+  <!-- RUBRIC -->
+  <section class="panel" id="panel-rubric" hidden>
+    <h2>Rubric <span class="muted" id="taxVersion"></span></h2>
+    <p class="help">The model is prompted with exactly this text. When labels disagree with how YOUR
+       team labels, fix the words here — measured, one rewritten paragraph moved coverage 11%→91%
+       on a real corpus.</p>
+    <label title="One label per line. Order sets the 1–9 review keys.">labels (one per line)
+      <textarea id="taxLabels" rows="4"></textarea></label>
+    <div id="taxDefs"></div>
+    <label title="Tie-breaking rules and conventions — where per-label definitions aren't enough.">guidelines
+      <textarea id="taxGuide" rows="3"></textarea></label>
+    <button id="taxSave" class="primary" title="Saves a new rubric version. Re-run labeling (step 4) to apply it.">Save rubric</button>
+    <div class="notice" id="taxMsg"></div>
+  </section>
+
+  <!-- GOLD -->
+  <section class="panel" id="panel-gold" hidden>
+    <h2>Gold labels</h2>
+    <p class="help">Gold is the ground truth the gate calibrates against — the precision promise is
+       only as good as this sample. Tessera picks items spread across the corpus; you label them
+       with the keyboard. <b>50–150 is the useful range.</b></p>
+    <div class="row">
+      <label title="How many items to author now.">sample size
+        <input type="number" id="bootN" value="60" min="5" max="500" /></label>
+      <button id="bootStart" class="primary" title="Start authoring: the review pane switches to gold mode.">Author gold</button>
+      <button id="bootStop" hidden title="Stop authoring and return to normal review.">Stop authoring</button>
     </div>
-    <div id="reviewer" hidden>
-      <div class="meta">
-        <span id="progress"></span>
-        <span class="conf" id="conf"></span>
-      </div>
-      <div class="text" id="text"></div>
-      <div class="suggestion">
-        suggested: <b id="suggested"></b>
-        <button class="explain" id="explainBtn">explain (e)</button>
-      </div>
-      <div class="rationale" id="rationale" hidden></div>
-      <div class="labels" id="labels"></div>
-      <div class="hint">
-        <b>Enter</b>/<b>A</b> accept · <b>1–9</b> pick a label (correct) ·
-        <b>R</b> reject · <b>U</b> undo · <b>J/K</b> next/prev · <b>E</b> explain ·
-        <b>Q</b> report
-      </div>
+    <div class="notice" id="bootMsg"></div>
+  </section>
+
+  <!-- RUN -->
+  <section class="panel" id="panel-run" hidden>
+    <h2>Label the dataset</h2>
+    <div class="serving" id="serving" title="Which model will do the labeling, and whether it is answering.">checking model…</div>
+    <p class="help">Runs the model over every item, calibrates confidence on your gold, and
+       auto-applies only what clears the target. The rest queues for you in Review.</p>
+    <div class="row">
+      <label title="The precision the auto-applied labels must hold. The gate refuses coverage it cannot promise.">target precision
+        <input type="number" id="runTarget" value="0.90" min="0.5" max="0.999" step="0.005" /></label>
+      <button id="runGo" class="primary" title="Start the labeling run. Progress shows live; the UI stays usable.">Run labeling</button>
     </div>
+    <div class="runbar" id="runBar" hidden><div class="runfill" id="runFill"></div><span id="runText"></span></div>
+    <div class="notice" id="runMsg"></div>
+  </section>
+
+  <!-- REVIEW (default) -->
+  <section class="panel" id="panel-review">
+    <section class="trust">
+      <div class="trust-row">
+        <label for="target" title="Slide to trade coverage for precision, then Re-gate. The dataset remembers its target.">Target precision: <b id="targetVal">95%</b></label>
+        <input type="range" id="target" min="0.50" max="0.999" step="0.005" value="0.95"
+               title="Higher = fewer, surer auto-labels. Lower = more coverage." />
+        <button id="regate" title="Recompute which items auto-apply at this target (no model calls).">Re-gate</button>
+        <button id="reportBtn" title="Coverage, cross-validated precision, calibration curve, audits, caveats (Q)">Report</button>
+      </div>
+      <div id="coverage" class="coverage" title="What shipped automatically at the promised precision, and what needs you.">—</div>
+      <div id="report" hidden><div id="reportBody"></div></div>
+    </section>
+
+    <section class="card" id="card">
+      <div class="empty" id="empty" hidden>
+        Queue empty — every uncertain item has been reviewed.
+        Auto-labeled items were applied without you; grab them in <b>Export</b>.
+      </div>
+      <div id="reviewer" hidden>
+        <div class="meta">
+          <span id="progress"></span>
+          <span class="conf" id="conf" title="Calibrated confidence and labeler agreement for this item."></span>
+        </div>
+        <div class="text" id="text"></div>
+        <div class="suggestion">
+          suggested: <b id="suggested"></b>
+          <button class="explain" id="explainBtn" title="Why the model picked this label (E)">explain (e)</button>
+        </div>
+        <div class="rationale" id="rationale" hidden></div>
+        <div class="labels" id="labels"></div>
+        <div class="hint">
+          <b>Enter</b>/<b>A</b> accept · <b>1–9</b> pick a label (correct) ·
+          <b>R</b> reject · <b>U</b> undo · <b>J/K</b> next/prev · <b>E</b> explain ·
+          <b>Q</b> report
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <!-- EXPORT -->
+  <section class="panel" id="panel-export" hidden>
+    <h2>Export</h2>
+    <p class="help">Finalized labels = everything auto-applied at the promise plus everything you
+       decided. Items still in the queue are not exported — honesty over completeness.</p>
+    <div class="row exports">
+      <a class="btn" href="/api/export/labels.jsonl" title="One JSON object per finalized item: {id, text, label}.">labels.jsonl</a>
+      <a class="btn" href="/api/export/labels.csv" title="The same finalized labels as a spreadsheet-friendly CSV.">labels.csv</a>
+      <a class="btn" href="/api/export/pairs.jsonl" title="Training pairs for fine-tuning your own model (the flywheel).">pairs.jsonl</a>
+    </div>
+    <div class="notice" id="expMsg"></div>
   </section>
 </main>
 

@@ -106,13 +106,29 @@ def load_gold(path, dataset_id, items=None) -> list:
 def ingest(storage, dataset_id, name, items, taxonomy, gold=None):
     storage.add_dataset(Dataset(id=dataset_id, name=name))
     storage.add_taxonomy(taxonomy)
+    # dataset -> taxonomy mapping, so datasets with no predictions yet (fresh
+    # imports, bootstrap-only) can still be opened by the app/server
+    storage.set_kv(dataset_id, "taxonomy_id", taxonomy.id)
     storage.add_items(items)
     if gold:
         storage.add_gold(gold)
 
 
-def run_full(storage, dataset_id, taxonomy, settings, target_precision=None):
-    """Run the labeling pass then calibrate + gate. Returns GateResult."""
+def taxonomy_for_dataset(storage, dataset_id):
+    """The dataset's taxonomy: from its predictions when it has been labeled,
+    else from the kv mapping ingest records. None only for pre-v0.17 datasets
+    that were never labeled."""
+    preds = storage.get_predictions(dataset_id)
+    if preds:
+        return storage.get_taxonomy(preds[0].taxonomy_id)
+    tid = storage.get_kv(dataset_id, "taxonomy_id")
+    return storage.get_taxonomy(tid) if tid else None
+
+
+def run_full(storage, dataset_id, taxonomy, settings, target_precision=None,
+             on_progress=None):
+    """Run the labeling pass then calibrate + gate. Returns GateResult.
+    on_progress(done, total) fires per labeled item (UI progress)."""
     target = target_precision if target_precision is not None else settings.target_precision
     examples = None
     if getattr(settings, "fewshot", 0):
@@ -149,7 +165,8 @@ def run_full(storage, dataset_id, taxonomy, settings, target_precision=None):
         storage.set_clusters(dataset_id, {})
 
     run_labeling_pass(storage, dataset_id, taxonomy, labelers,
-                      workers=settings.workers, only_ids=only_ids)
+                      workers=settings.workers, only_ids=only_ids,
+                      on_progress=on_progress)
     return calibrate_and_gate(storage, dataset_id, taxonomy, target, settings,
                               judge=make_judge(settings))
 

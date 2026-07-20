@@ -8,6 +8,66 @@ let labels = [];
 let labelType = "classification";
 let currentSpans = [];   // span-mode working copy of the annotation being reviewed
 let bootstrapMode = false;   // cold-start gold authoring: no model has run yet
+let S = null;            // last /api/state payload — the UI's single source of truth
+let runPoll = null;      // interval handle while a labeling run is in flight
+
+// ---- workflow shell: panels, strip, guidance ----
+
+const PANELS = ["import", "rubric", "gold", "run", "review", "export"];
+
+function showPanel(name) {
+  PANELS.forEach((p) => {
+    document.getElementById("panel-" + p).hidden = p !== name;
+    document.querySelector(`.flow button[data-panel="${p}"]`)
+      .classList.toggle("active", p === name);
+  });
+  if (name === "rubric") renderRubricEditor();
+}
+
+function currentPanel() {
+  for (const p of PANELS) if (!document.getElementById("panel-" + p).hidden) return p;
+  return "review";
+}
+
+function flowState() {
+  // Derive each stage's state from the dataset's REAL state — the strip is
+  // honest guidance, not decoration.
+  if (!S) return {};
+  const c = S.counts;
+  const st = {};
+  st.import = c.items > 0 ? "done" : "attn";
+  st.rubric = c.items > 0 ? "done" : "";
+  st.gold = c.gold >= 10 ? "done" : (c.items > 0 && c.predictions === 0 ? "attn" : "");
+  st.run = c.predictions > 0 ? "done"
+         : (c.items > 0 && c.gold >= 10 ? "attn" : "");
+  const open = c.queued + c.audit_pending;
+  st.review = c.predictions === 0 ? "" : (open > 0 ? "attn" : "done");
+  st.export = c.finalized > 0 ? "done" : "";
+  return st;
+}
+
+function guideText(st) {
+  if (!S) return "";
+  const c = S.counts;
+  if (bootstrapMode) return "authoring gold — label the sample in Review, then Stop authoring (step 3)";
+  if (st.import === "attn") return "next: Import your items (step 1) — or explore the bundled sample";
+  if (st.gold === "attn") return `next: author gold labels (step 3) — ${c.gold} so far; the gate calibrates on these`;
+  if (st.run === "attn") return "next: run labeling (step 4) — the model labels everything, the gate keeps its promise";
+  if (S.run && S.run.running) return `labeling… ${S.run.done}/${S.run.total}`;
+  if (st.review === "attn") return `next: review — ${c.queued} queued + ${c.audit_pending} audit item(s) need you`;
+  if (st.export === "done" && st.review === "done") return "all reviewed — export your labels (step 6), or import more data";
+  return "";
+}
+
+function renderFlow() {
+  const st = flowState();
+  PANELS.forEach((p) => {
+    const b = document.querySelector(`.flow button[data-panel="${p}"]`);
+    b.classList.toggle("done", st[p] === "done");
+    b.classList.toggle("attn", st[p] === "attn");
+  });
+  document.getElementById("guide").textContent = guideText(st);
+}
 
 async function getJSON(url) { const r = await fetch(url); return r.json(); }
 async function postJSON(url, body) {
@@ -22,9 +82,42 @@ function fmtPct(x) { return (x * 100).toFixed(1) + "%"; }
 
 async function refreshState() {
   const s = await getJSON("/api/state");
+  S = s;
   labels = s.taxonomy.labels;
   labelType = s.taxonomy.label_type || "classification";
   bootstrapMode = !!s.bootstrap;
+
+  // dataset picker
+  const pick = document.getElementById("dsPick");
+  pick.innerHTML = "";
+  (s.datasets || [s.dataset_id]).forEach((d) => {
+    const o = document.createElement("option");
+    o.value = o.textContent = d;
+    o.selected = d === s.dataset_id;
+    pick.appendChild(o);
+  });
+
+  // serving status + run progress (Label panel)
+  const sv = document.getElementById("serving");
+  sv.textContent = `model: ${s.serving.provider}` +
+    (s.serving.ok ? " — answering" : " — NOT answering") +
+    (s.serving.note ? ` · ${s.serving.note}` : "");
+  sv.className = "serving " + (s.serving.ok ? "ok" : "bad");
+  const bar = document.getElementById("runBar");
+  if (s.run && (s.run.running || s.run.error)) {
+    bar.hidden = false;
+    const pctRun = s.run.total ? Math.round(100 * s.run.done / s.run.total) : 0;
+    document.getElementById("runFill").style.width = pctRun + "%";
+    document.getElementById("runText").textContent = s.run.error
+      ? "run failed — see below" : `labeling ${s.run.done} / ${s.run.total}`;
+    if (s.run.error) {
+      const m = document.getElementById("runMsg");
+      m.textContent = s.run.error; m.className = "notice err";
+    }
+  } else { bar.hidden = true; }
+  document.getElementById("bootStop").hidden = !bootstrapMode;
+  renderFlow();
+
   if (bootstrapMode) {
     document.querySelector(".hint").innerHTML =
       "<b>1–9</b> pick the correct label · <b>R</b> skip · <b>U</b> undo · " +
@@ -34,7 +127,7 @@ async function refreshState() {
       `${s.counts.items} items · authoring gold: ${b.done} done · ${b.remaining} to go`;
     document.getElementById("coverage").innerHTML =
       `Gold so far: <b>${b.gold}</b> — labels you author here calibrate the gate ` +
-      `(aim for ~50–150; press Ctrl+C in the terminal when done)`;
+      `(aim for ~50–150; hit <b>Stop authoring</b> in step 3 when done)`;
     return;
   }
   if (labelType === "span") {
@@ -53,7 +146,123 @@ async function refreshState() {
       `at ≥ ${fmtPct(s.gate.target_precision)} precision · ${s.gate.n_queue} routed to you`;
     document.getElementById("target").value = s.gate.target_precision;
     document.getElementById("targetVal").textContent = fmtPct(s.gate.target_precision);
+  } else {
+    document.getElementById("coverage").textContent = c.predictions
+      ? "re-gating…" : "not labeled yet — Import (1), author Gold (3), then Run (4)";
   }
+}
+
+// ---- import / rubric / gold / run / dataset handlers ----
+
+function readFile(input) {
+  const f = input.files && input.files[0];
+  if (!f) return Promise.resolve(null);
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res({ name: f.name, content: r.result });
+    r.onerror = rej;
+    r.readAsText(f);
+  });
+}
+
+function note(id, msg, ok) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = "notice " + (ok ? "ok" : "err");
+}
+
+async function doImport() {
+  const name = document.getElementById("impName").value.trim();
+  const items = await readFile(document.getElementById("impItems"));
+  if (!name || !items) return note("impMsg", "need a dataset name and an items file", false);
+  const tax = await readFile(document.getElementById("impTax"));
+  const gold = await readFile(document.getElementById("impGold"));
+  const r = await postJSON("/api/import", {
+    dataset: name, items_name: items.name, items: items.content,
+    taxonomy: tax ? tax.content : null,
+    gold_name: gold ? gold.name : null, gold: gold ? gold.content : null,
+  });
+  if (r.error) return note("impMsg", r.error, false);
+  note("impMsg", `imported ${r.n_items} item(s)` +
+       (r.n_gold ? ` + ${r.n_gold} gold` : "") +
+       ` into '${r.dataset_id}' — next: rubric (2) and gold (3)`, true);
+  await refreshState(); await refreshQueue();
+}
+
+function renderRubricEditor() {
+  if (!S) return;
+  const t = S.taxonomy;
+  document.getElementById("taxVersion").textContent = `v${t.version} · ${t.label_type}`;
+  document.getElementById("taxLabels").value = t.labels.join("\n");
+  document.getElementById("taxGuide").value = t.guidelines || "";
+  const box = document.getElementById("taxDefs");
+  box.innerHTML = "";
+  t.labels.forEach((lab) => {
+    const w = document.createElement("label");
+    w.className = "defrow";
+    w.title = `Definition the model reads for '${lab}'. Encode YOUR conventions here.`;
+    const s = document.createElement("span");
+    s.className = "deflabel"; s.textContent = lab;
+    const ta = document.createElement("textarea");
+    ta.rows = 2; ta.dataset.label = lab; ta.value = t.definitions[lab] || "";
+    w.appendChild(s); w.appendChild(ta);
+    box.appendChild(w);
+  });
+}
+
+async function saveRubric() {
+  const labs = document.getElementById("taxLabels").value
+    .split("\n").map((x) => x.trim()).filter(Boolean);
+  const defs = {};
+  document.querySelectorAll("#taxDefs textarea").forEach((ta) => {
+    if (labs.includes(ta.dataset.label)) defs[ta.dataset.label] = ta.value;
+  });
+  const r = await postJSON("/api/taxonomy", {
+    labels: labs, definitions: defs,
+    guidelines: document.getElementById("taxGuide").value,
+  });
+  if (r.error) return note("taxMsg", r.error, false);
+  note("taxMsg", `saved as v${r.version} — re-run labeling (4) to apply it`, true);
+  await refreshState();
+  renderRubricEditor();
+}
+
+async function goldStart() {
+  const n = parseInt(document.getElementById("bootN").value, 10) || 60;
+  const r = await postJSON("/api/bootstrap/start", { n });
+  if (r.error) return note("bootMsg", r.error, false);
+  note("bootMsg", `${r.n} item(s) picked across the corpus — label them in Review`, true);
+  await refreshState(); await refreshQueue();
+  showPanel("review");
+}
+
+async function goldStop() {
+  const r = await postJSON("/api/bootstrap/stop", {});
+  if (r.error) return note("bootMsg", r.error, false);
+  note("bootMsg", `done — ${r.authored} gold label(s) authored this session`, true);
+  await refreshState(); await refreshQueue();
+}
+
+async function startRun() {
+  const target = parseFloat(document.getElementById("runTarget").value) || 0.9;
+  const r = await postJSON("/api/run", { target_precision: target });
+  if (r.error) return note("runMsg", r.error, false);
+  note("runMsg", `labeling ${r.total} item(s)…`, true);
+  if (runPoll) clearInterval(runPoll);
+  runPoll = setInterval(async () => {
+    await refreshState();
+    if (S && S.run && !S.run.running) {
+      clearInterval(runPoll); runPoll = null;
+      if (!S.run.error) note("runMsg", "run complete — the queue is ready in Review (5)", true);
+      await refreshQueue();
+    }
+  }, 1500);
+}
+
+async function switchDataset(id) {
+  const r = await postJSON("/api/dataset", { id });
+  if (r.error) { await refreshState(); return; }
+  await refreshState(); await refreshQueue();
 }
 
 async function refreshQueue() {
@@ -358,6 +567,9 @@ async function toggleReport() {
 }
 
 document.addEventListener("keydown", (e) => {
+  // typing in a form field is never a review shortcut
+  if (/^(input|textarea|select)$/i.test(e.target.tagName)) return;
+  if (currentPanel() !== "review") return;
   if (e.key.toLowerCase() === "u") { undo(); return; }         // works even with an empty queue
   if (e.key.toLowerCase() === "q") { toggleReport(); return; }
   if (document.getElementById("reviewer").hidden) return;
@@ -405,4 +617,32 @@ document.getElementById("regate").addEventListener("click", async () => {
 document.getElementById("explainBtn").addEventListener("click", toggleExplain);
 document.getElementById("reportBtn").addEventListener("click", toggleReport);
 
-(async function init() { await refreshState(); await refreshQueue(); })();
+// workflow shell wiring
+document.querySelectorAll(".flow button").forEach((b) =>
+  b.addEventListener("click", () => showPanel(b.dataset.panel)));
+document.getElementById("dsPick").addEventListener("change", (e) => switchDataset(e.target.value));
+document.getElementById("impGo").addEventListener("click", doImport);
+document.getElementById("taxSave").addEventListener("click", saveRubric);
+document.getElementById("bootStart").addEventListener("click", goldStart);
+document.getElementById("bootStop").addEventListener("click", goldStop);
+document.getElementById("runGo").addEventListener("click", startRun);
+
+(async function init() {
+  await refreshState();
+  await refreshQueue();
+  // land on the stage that needs attention, not always on review
+  const st = flowState();
+  showPanel(st.import === "attn" ? "import" : (st.gold === "attn" ? "gold"
+            : (st.run === "attn" ? "run" : "review")));
+  if (S && S.run && S.run.running && !runPoll) startRunPollOnly();
+})();
+
+function startRunPollOnly() {
+  runPoll = setInterval(async () => {
+    await refreshState();
+    if (S && S.run && !S.run.running) {
+      clearInterval(runPoll); runPoll = null;
+      await refreshQueue();
+    }
+  }, 1500);
+}
