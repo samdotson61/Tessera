@@ -88,14 +88,29 @@ against maintainer truth:
 
 ## 5. The corrected SMS numbers (erratum companion)
 
-Re-measured on the fixed stack, hidden-reference truth: the local 4B logprob
-head alone labels all 300 SMS at **95.7% true**; with consensus, **100%
-coverage at 97.0% true (96.7% unseen)** — at both the 90% and 95% targets.
+Re-measured on the fixed stack, hidden-reference truth, both model tiers
+(near-duplicate propagation on; all 4 propagated members match the
+reference):
+
+| run | target | coverage | true (unseen) |
+|---|---|---|---|
+| 4B logprob alone | 90% / 95% | 100% | 95.7% (95.8%) |
+| **4B + consensus** | 90% / 95% | **100%** | **97.0% (96.7%)** |
+| 2B logprob alone | 90% | 59.0% | 78.0% (74.0%) — promise broken |
+| 2B logprob alone | 95% | 0% — honest refusal | — |
+| **2B + consensus** | 90% | **100%** | **93.0% (92.5%)** |
+| **2B + consensus** | 95% | **87.0%** | **98.9% (99.0%)** |
+
 The v0.10.0 "plain logprob over-promises / consensus catches it" narrative
-was measured against the mute model (its "labels" were the ham base rate);
-what that session *actually* demonstrated is that the safety stack —
-consensus routing, audit sampling, gold-growth collapse — correctly
-contained a broken labeler nobody knew was broken.
+was measured against the mute model (its "labels" were the ham base rate) —
+but the corrected 2B arms show the same shape for real: the small model's
+own confidence breaks the 90% promise by 12 points, invisible to its
+60-gold CV, and the consensus co-signal is what makes it honest. On the 2B
+the 95% target is the sweet spot (13 points of coverage buys ~6 of
+precision — 87% of the corpus at ~99%). What the original session *actually*
+demonstrated is that the safety stack — consensus routing, audit sampling,
+gold-growth collapse — correctly contained a broken labeler nobody knew was
+broken.
 
 ## 6. Protocol for the real engagement
 
