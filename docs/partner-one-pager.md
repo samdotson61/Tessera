@@ -56,7 +56,6 @@ it does not quietly deliver worse labels than it promised.
 
 *Tessera is open source: github.com/samdotson61/Tessera — the design docs,
 test suite (200+ tests), and every measurement above are in the repo.
-Install is one line (`pip install
-git+https://github.com/samdotson61/Tessera.git`), and `tessera app` opens
-the whole thing; single-file binaries are built for macOS, Windows, and
-Linux.*
+Install is one line (the README's `curl | sh` / PowerShell installer pulls
+a prebuilt binary for macOS, Windows, or Linux — no Python required), and
+`tessera app` opens the whole thing.*

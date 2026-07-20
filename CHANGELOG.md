@@ -3,6 +3,21 @@
 All notable changes to Tessera. Versions follow semver; the version lives in
 `pyproject.toml` and `tessera/__init__.py`.
 
+## 0.15.0 — 2026-07-20
+
+### Added
+- **GitHub-native installers** — no PyPI, and no Python required on the
+  binary path. macOS/Linux: `curl -fsSL …/install.sh | sh` downloads the
+  prebuilt one-file binary from the latest release into `~/.local/bin`
+  (override with `TESSERA_BIN`), falling back to a pip install from source
+  into `~/.tessera` when no binary matches the OS/arch (needs Python
+  3.10+); every step reports honestly and ends with the `tessera app` next
+  step. Windows: `irm …/install.ps1 | iex` installs `tessera.exe` to
+  `%LOCALAPPDATA%\Tessera` and adds it to the user PATH. Release creation
+  in the binary workflow made race-proof (three matrix jobs share it).
+  PyPI publication deferred by decision — the dist tooling remains in the
+  `[release]` extra.
+
 ## 0.14.0 — 2026-07-20
 
 Open it like an app — multi-platform. Construction tracker: `appmap.mp`.

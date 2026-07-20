@@ -57,6 +57,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
+          # three matrix jobs race here: view-or-create must tolerate a
+          # sibling creating the release between our check and our create
           gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
-            gh release create "${GITHUB_REF_NAME}" --generate-notes
+            gh release create "${GITHUB_REF_NAME}" --generate-notes || true
           gh release upload "${GITHUB_REF_NAME}" "dist/${{ matrix.artifact }}" --clobber

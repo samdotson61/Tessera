@@ -12,12 +12,20 @@ data flywheel. *Tessera is a working codename — rename at will.*
 > is specified in [`docs/03`](docs/03-system-architecture.md) and
 > [`docs/08`](docs/08-implementation-and-development-plan.md).
 
-## Open it like an app
+## Install & open it like an app
 
 ```bash
-pip install git+https://github.com/samdotson61/Tessera.git   # installs the `tessera` command
-tessera app                                                   # server + review UI in one step
+# macOS / Linux — prebuilt binary from the latest release (pip-from-source fallback):
+curl -fsSL https://raw.githubusercontent.com/samdotson61/Tessera/main/install.sh | sh
+
+# Windows (PowerShell):
+irm https://raw.githubusercontent.com/samdotson61/Tessera/main/install.ps1 | iex
+
+tessera app        # server + review UI in one step
 ```
+
+(Or, with Python 3.10+:
+`pip install git+https://github.com/samdotson61/Tessera.git`.)
 
 First run loads the bundled sample **offline** (the deterministic stub — no
 model or API is called by double-clicking anything); after that, `tessera
